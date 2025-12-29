@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-from fpdf import FPDF
+from fpdf import fpdf2
 import sqlite3
 import io
 from math import inf
