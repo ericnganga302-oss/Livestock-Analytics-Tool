@@ -265,3 +265,141 @@ if st.checkbox("Show saved runs (from local DB)"):
         st.dataframe(df_runs)
     except Exception as e:
         st.error(f"Could not read DB: {e}")
+import math
+import streamlit as st
+
+# Example constants (replace with your app's values)
+SPECIES_INFO = {
+    "cattle": {"adg_threshold": 0.8},
+    # add species...
+}
+
+def safe_float(val, default=0.0):
+    try:
+        return float(val)
+    except Exception:
+        return default
+
+def compute_days_to_target(adg, current_wt, target_wt):
+    """
+    Return number of days to reach target based on adg.
+    If adg <= 0 or target <= current, returns None.
+    """
+    if adg is None or adg <= 0:
+        return None
+    if target_wt <= current_wt:
+        return 0.0
+    remaining = target_wt - current_wt
+    return remaining / adg
+
+def compute_days_saved(res_adg, expected_boost, current_wt, target_wt):
+    """
+    Returns (days_current, days_new, days_saved) or (None, None, None) on invalid inputs.
+    """
+    if res_adg is None or res_adg <= 0:
+        return None, None, None
+    new_adg = res_adg + expected_boost
+    if new_adg <= 0:
+        return None, None, None
+
+    days_current = compute_days_to_target(res_adg, current_wt, target_wt)
+    days_new = compute_days_to_target(new_adg, current_wt, target_wt)
+    if days_current is None or days_new is None:
+        return None, None, None
+    days_saved = max(0.0, days_current - days_new)
+    return days_current, days_new, days_saved
+
+def estimate_additional_feed_cost(days_new, new_adg, res_fcr, feed_price_delta):
+    """
+    Quick estimate of extra feed cost = (days_new * daily_feed_intake * price_delta)
+    daily_feed_intake approximated as new_adg * fcr (if fcr provided).
+    Returns None if fcr is invalid.
+    """
+    if days_new is None or new_adg is None or res_fcr is None:
+        return None
+    if res_fcr <= 0 or new_adg <= 0:
+        return None
+    daily_feed = new_adg * res_fcr
+    return days_new * daily_feed * feed_price_delta
+
+# --- UI (your existing layout) ---
+st.markdown("---")
+col_advice, col_sim = st.columns([1, 1])
+
+# Replace these with values from your app/context
+species = st.session_state.get("species", "cattle")
+feed_cost = st.session_state.get("feed_cost", 100.0)  # KES/kg baseline
+res = st.session_state.get("res", "ERROR_WT")  # e.g. {'adg':0.6, 'fcr':6.0} or "ERROR_WT"
+current_wt = safe_float(st.session_state.get("current_wt", 200.0))
+target_wt = safe_float(st.session_state.get("target_wt", 300.0))
+
+with col_advice:
+    st.header("🩺 Expert Recommendations")
+    adg_threshold = SPECIES_INFO.get(species, {}).get("adg_threshold", None)
+
+    if res == "ERROR_WT" or not isinstance(res, dict):
+        st.info("Awaiting valid data...")
+    else:
+        # Validate expected keys
+        res_adg = safe_float(res.get("adg", None), default=None)
+        res_fcr = safe_float(res.get("fcr", None), default=None)
+
+        if adg_threshold is None:
+            st.warning("No benchmark available for selected species.")
+        elif res_adg < adg_threshold:
+            st.error(f"⚠️ Performance Gap Detected ({res_adg:.3f} vs {adg_threshold})")
+            st.markdown(
+                """
+                **Possible Causes & Actions:**
+                1. **Nutritional Deficit:** Current feed may lack the Crude Protein (CP) required for this species. Consider a supplement.
+                2. **Health Check:** Low gain despite high feed intake (FCR: {:.2f}) can indicate internal parasites. *Action: Check deworming schedule.*
+                3. **Water Intake:** Ensure 24/7 access to clean water; restricted water intake limits dry matter consumption.
+                """.format(res_fcr if res_fcr is not None else float("nan"))
+            )
+        else:
+            st.success(f"✅ Optimal Growth! Your {species} management is exceeding benchmarks.")
+            st.markdown("Maintaining this trajectory will minimize time-to-market and maximize your internal rate of return.")
+
+with col_sim:
+    st.header("💰 Cost-Benefit Simulator")
+    st.write("Does 'Cheap' feed actually save you money?")
+    with st.expander("Run 'What-If' Scenario"):
+        new_feed_price = st.number_input(
+            "Premium Feed Price (KES/kg)",
+            value=float(feed_cost) + 10.0,
+            min_value=0.0,
+            step=1.0,
+            format="%.2f",
+        )
+        expected_adg_boost = st.slider(
+            "Expected ADG Boost (kg/day)", min_value=0.0, max_value=0.5, value=0.15, step=0.01
+        )
+
+        if res == "ERROR_WT" or not isinstance(res, dict):
+            st.info("Cannot run simulator until performance data is available.")
+        else:
+            res_adg = safe_float(res.get("adg", None), default=None)
+            res_fcr = safe_float(res.get("fcr", None), default=None)
+
+            days_current, days_new, days_saved = compute_days_saved(
+                res_adg, expected_adg_boost, current_wt, target_wt
+            )
+
+            if days_saved is None:
+                st.warning("Insufficient or invalid inputs to compute days saved.")
+            elif days_saved <= 0:
+                st.write("No days will be saved with the expected ADG boost.")
+            else:
+                st.write(f"📈 Investing in premium feed could save you **{int(round(days_saved))} days** to target weight.")
+                st.info("Strategy: If the labor and maintenance costs saved over these days exceed the feed price increase, the premium feed is actually cheaper!")
+
+                # Optional: estimate extra feed cost vs current
+                new_adg = res_adg + expected_adg_boost
+                price_delta = new_feed_price - float(feed_cost)
+                # Estimate cost using FCR if available
+                extra_cost = estimate_additional_feed_cost(days_new, new_adg, res_fcr, price_delta)
+                if extra_cost is not None:
+                    st.write(f"Estimated additional feed cost for the premium feed: KES {extra_cost:,.2f}")
+                    st.caption("This is a rough estimate using FCR and daily gain. Include labour/savings to compare net benefit.")
+                else:
+                    st.caption("Provide FCR in performance data to estimate feed cost difference.")
