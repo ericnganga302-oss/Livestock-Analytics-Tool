@@ -1,241 +1,282 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-import numpy as np
+from fpdf import FPDF
+import sqlite3
+import io
 from math import inf
+from datetime import datetime
 
 # --- 1. APP CONFIGURATION ---
-st.set_page_config(
-    page_title="AEGIS Livestock Analytics",
-    page_icon="🌱",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+st.set_page_config(page_title="AEGIS Livestock Pro", page_icon="🧬", layout="wide")
 
-# --- 2. MINIMAL STYLE INJECTION (use with care) ---
-st.markdown(
-    """
-    <style>
-    /* lightweight styling that is less dependent on Streamlit internal class names */
-    .app-title { font-size:22px; font-weight:600; }
-    .kpi-card { background: #fff; padding: 10px 12px; border-radius:8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# --- 2. INITIALIZE SESSION STATE (in-memory DB for the session) ---
+if "animal_records" not in st.session_state:
+    st.session_state.animal_records = []
 
-# --- 3. CONSTANTS, BENCHMARKS & ECO-FACTORS ---
+# --- 3. SPECIES BENCHMARKS ---
 SPECIES_INFO = {
-    "Beef": {"target_weight": 450.0, "adg_threshold": 0.8, "icon": "🐂", "ch4": 0.18},
-    "Pig": {"target_weight": 130.0, "adg_threshold": 0.6, "icon": "🐖", "ch4": 0.04},
-    "Broiler": {"target_weight": 2.5, "adg_threshold": 0.05, "icon": "🐥", "ch4": 0.002},
+    "Beef": {"target": 450.0, "adg": 0.8, "icon": "🐂", "ch4": 0.18},
+    "Pig": {"target": 130.0, "adg": 0.6, "icon": "🐖", "ch4": 0.04},
+    "Broiler": {"target": 2.5, "adg": 0.05, "icon": "🐥", "ch4": 0.002},
 }
 
-# --- 4. SIDEBAR ---
-with st.sidebar:
-    st.title("Settings")
-    price_per_kg = st.number_input("Market Price (KES/kg)", min_value=0.0, value=210.0, step=1.0, help="Price per kg liveweight")
-    feed_cost = st.number_input("Feed Cost (KES/kg feed)", min_value=0.0, value=45.0, step=0.5, help="Cost per kg of feed")
-    st.divider()
-    st.info("Climate-Smart Edition: Tracking growth and methane efficiency.")
+DB_PATH = "livestock_runs.db"
 
-# --- 5. MAIN INTERFACE ---
-st.markdown('<div class="app-title">🐄 Livestock Enterprise Analytics</div>', unsafe_allow_html=True)
-st.caption("University of Nairobi | Animal Production Department | Decision Support System")
-
-col1, col2, col3 = st.columns(3)
-with col1:
-    species = st.selectbox("Species Type", list(SPECIES_INFO.keys()))
-    initial_wt = st.number_input("Starting Weight (kg)", min_value=0.0, value=250.0, step=0.1)
-with col2:
-    current_wt = st.number_input("Current Weight (kg)", min_value=0.0, value=300.0, step=0.1)
-    days = st.number_input("Days in Period", min_value=1, value=30, step=1)
-with col3:
-    target_wt = st.number_input("Target Weight (kg)", min_value=0.0, value=float(SPECIES_INFO[species]["target_weight"]), step=0.1)
-    feed_used = st.number_input("Total Feed Used (kg)", min_value=0.0, value=400.0, step=0.1)
-
-st.markdown("### Optional: Upload time-series weights (date,weight) to compute ADG from real measurements")
-upload = st.file_uploader("Upload CSV (date or day, weight)", type=["csv"])
-
-# --- 6. HELPERS ---
+# --- 4. HELPERS ---
 def safe_div(a, b):
     try:
         return a / b
     except Exception:
         return None
 
-def compute_adg_from_timeseries(df):
-    """
-    Expect df with two columns: date/day and weight.
-    If first column parses to datetime, compute day offsets; else treat as numeric days.
-    Returns adg (kg/day) and prepared dataframe (day, weight).
-    """
-    if df.shape[1] < 2:
-        return None, None
-    dcol = df.columns[0]
-    wcol = df.columns[1]
+def create_pdf_bytes(records):
+    """Return PDF as bytes (binary) for download."""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 8, "AEGIS Livestock Analytics - Production Report", ln=True, align="C")
+    pdf.set_font("Arial", size=10)
+    pdf.cell(0, 6, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align="C")
+    pdf.ln(6)
+
+    # Table header
+    col_names = ["Animal ID", "Species", "ADG (kg/day)", "Profit (KES)", "Methane (kg)", "Weight (kg)"]
+    widths = [35, 30, 30, 35, 35, 30]
+    pdf.set_fill_color(220, 230, 255)
+    pdf.set_font("Arial", "B", 9)
+    for name, w in zip(col_names, widths):
+        pdf.cell(w, 8, name, 1, 0, "C", True)
+    pdf.ln()
+
+    pdf.set_font("Arial", size=9)
+    for r in records:
+        pdf.cell(widths[0], 7, str(r.get("ID", ""))[:18], 1)
+        pdf.cell(widths[1], 7, str(r.get("Species", "")), 1)
+        pdf.cell(widths[2], 7, f"{r.get('ADG', 0):.2f}" if r.get("ADG") is not None else "—", 1, 0, "R")
+        pdf.cell(widths[3], 7, f"{r.get('Profit', 0):,.0f}", 1, 0, "R")
+        pdf.cell(widths[4], 7, f"{r.get('Methane', 0):.2f}", 1, 0, "R")
+        pdf.cell(widths[5], 7, f"{r.get('Weight', 0):.1f}", 1, 1, "R")
+
+    return pdf.output(dest="S").encode("latin-1")
+
+def init_db(path=DB_PATH):
+    conn = sqlite3.connect(path)
+    cur = conn.cursor()
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT,
+        animal_id TEXT,
+        species TEXT,
+        weight REAL,
+        adg REAL,
+        profit REAL,
+        methane REAL
+    )
+    """)
+    conn.commit()
+    conn.close()
+
+def save_records_to_db(records, path=DB_PATH):
+    init_db(path)
+    conn = sqlite3.connect(path)
+    cur = conn.cursor()
+    rows = []
+    for r in records:
+        rows.append((
+            datetime.utcnow().isoformat(),
+            r.get("ID"),
+            r.get("Species"),
+            float(r.get("Weight", 0)),
+            float(r.get("ADG", 0)) if r.get("ADG") is not None else None,
+            float(r.get("Profit", 0)),
+            float(r.get("Methane", 0)),
+        ))
+    cur.executemany("""
+        INSERT INTO runs (timestamp, animal_id, species, weight, adg, profit, methane)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, rows)
+    conn.commit()
+    conn.close()
+
+def load_db_records(path=DB_PATH, limit=500):
     try:
-        df = df[[dcol, wcol]].dropna()
-        # try parse dates
-        dates = pd.to_datetime(df[dcol], errors="coerce")
-        if dates.notna().sum() >= 2:
-            df["day"] = (dates - dates.iloc[0]).dt.total_seconds() / (24*3600)
-        else:
-            df["day"] = pd.to_numeric(df[dcol], errors="coerce") - pd.to_numeric(df[dcol], errors="coerce").iloc[0]
-        df["weight"] = pd.to_numeric(df[wcol], errors="coerce")
-        df = df.dropna(subset=["day", "weight"])
-        if len(df) < 2:
-            return None, None
-        x = df["day"].to_numpy()
-        y = df["weight"].to_numpy()
-        m, c = np.polyfit(x, y, 1)
-        return float(m), df[["day", "weight"]].reset_index(drop=True)
+        conn = sqlite3.connect(path)
+        df = pd.read_sql_query(f"SELECT * FROM runs ORDER BY id DESC LIMIT {limit}", conn)
+        conn.close()
+        return df
     except Exception:
-        return None, None
+        return pd.DataFrame()
 
-def estimate_days_to_target(current_wt, target_wt, adg):
-    if target_wt <= current_wt:
-        return 0.0
-    if adg is None or adg <= 0:
-        return inf
-    remaining = target_wt - current_wt
-    return remaining / adg
+# --- 5. UI HEADER ---
+st.title("🐄 AEGIS Livestock Analytics Pro")
+st.caption("University of Nairobi | Animal Production Department | Smart-Farm Edition")
 
-# --- 7. ADG FROM TIMESERIES (OPTIONAL) ---
-timeseries_adg = None
-ts_df = None
-if upload:
-    try:
-        df_in = pd.read_csv(upload)
-        timeseries_adg, ts_df = compute_adg_from_timeseries(df_in)
-        if timeseries_adg is not None:
-            st.success(f"Computed ADG from uploaded series: {timeseries_adg:.4f} kg/day")
-            # optionally overwrite current weight to last measured point
-            last_w = float(ts_df["weight"].iloc[-1])
-            current_wt = st.number_input("Current Weight (kg) (from series)", value=last_w, step=0.1)
+# --- 6. INPUT FORM (Batch Input) in sidebar ---
+with st.sidebar:
+    st.header("🧬 New Animal Entry / Bulk Upload")
+
+    # Single entry form
+    with st.form("entry_form", clear_on_submit=True):
+        animal_id = st.text_input("Animal Tag ID", value=f"TAG-{len(st.session_state.animal_records)+1}")
+        spec = st.selectbox("Species", list(SPECIES_INFO.keys()))
+        col_in1, col_in2 = st.columns(2)
+        with col_in1:
+            wt_start = st.number_input("Start Weight (kg)", 0.0, 10000.0, 250.0, step=0.1)
+            wt_curr = st.number_input("Current Weight (kg)", 0.0, 10000.0, 300.0, step=0.1)
+        with col_in2:
+            period = st.number_input("Days", 1, 3650, 30)
+            feed = st.number_input("Feed Used (kg)", 0.0, 100000.0, 400.0, step=0.1)
+
+        m_price = st.number_input("Market Price (KES/kg)", value=210.0, step=1.0)
+        f_price = st.number_input("Feed Price (KES/kg)", value=45.0, step=0.1)
+
+        submit = st.form_submit_button("➕ Add to Session")
+
+        if submit:
+            if wt_curr > wt_start:
+                gain = wt_curr - wt_start
+                adg = safe_div(gain, period)
+                # incremental profit for the period (value of gain minus feed cost)
+                profit_inc = (gain * m_price) - (feed * f_price)
+                # also compute gross current value and net after feed cost if useful
+                gross_current_value = (wt_curr * m_price)
+                methane = period * SPECIES_INFO[spec]["ch4"]
+                record = {
+                    "ID": animal_id,
+                    "Species": spec,
+                    "ADG": round(adg, 4) if adg is not None else None,
+                    "Profit": profit_inc,
+                    "GrossValue": gross_current_value,
+                    "Methane": methane,
+                    "Weight": wt_curr,
+                    "Timestamp": datetime.utcnow().isoformat(),
+                }
+                st.session_state.animal_records.append(record)
+                st.success(f"Record for {animal_id} saved to session.")
+            else:
+                st.error("Current weight must be greater than start weight.")
+
+    # Bulk CSV upload (optional)
+    st.markdown("---")
+    st.write("Bulk import CSV: columns -> ID, Species, StartWeight, CurrentWeight, Days, FeedUsed, MarketPrice, FeedPrice")
+    csv_file = st.file_uploader("Upload CSV to add multiple records", type=["csv"])
+    if csv_file is not None:
+        try:
+            bulk_df = pd.read_csv(csv_file)
+            added = 0
+            for _, row in bulk_df.iterrows():
+                try:
+                    aid = str(row.get("ID", f"TAG-{len(st.session_state.animal_records)+1}"))
+                    species = row.get("Species", list(SPECIES_INFO.keys())[0])
+                    start = float(row.get("StartWeight", 0))
+                    curr = float(row.get("CurrentWeight", 0))
+                    days = int(row.get("Days", 1))
+                    feed_used = float(row.get("FeedUsed", 0))
+                    mpr = float(row.get("MarketPrice", m_price))
+                    fpr = float(row.get("FeedPrice", f_price))
+                    if curr > start and species in SPECIES_INFO:
+                        gain = curr - start
+                        adg = safe_div(gain, days)
+                        profit_inc = (gain * mpr) - (feed_used * fpr)
+                        methane = days * SPECIES_INFO[species]["ch4"]
+                        st.session_state.animal_records.append({
+                            "ID": aid,
+                            "Species": species,
+                            "ADG": round(adg, 4) if adg is not None else None,
+                            "Profit": profit_inc,
+                            "GrossValue": curr * mpr,
+                            "Methane": methane,
+                            "Weight": curr,
+                            "Timestamp": datetime.utcnow().isoformat(),
+                        })
+                        added += 1
+                except Exception:
+                    continue
+            st.success(f"Imported {added} records from CSV.")
+        except Exception as e:
+            st.error(f"Failed to parse CSV: {e}")
+
+    st.markdown("---")
+    if st.button("Save session records to local DB"):
+        if st.session_state.animal_records:
+            try:
+                save_records_to_db(st.session_state.animal_records)
+                st.success("Saved session records to local SQLite DB.")
+            except Exception as e:
+                st.error(f"Failed to save to DB: {e}")
         else:
-            st.warning("Could not compute ADG from uploaded file — ensure file has two columns (date/day, weight) and ≥2 valid rows.")
-    except Exception as e:
-        st.error(f"Failed to read uploaded CSV: {e}")
+            st.info("No records in session to save.")
 
-# --- 8. CALCULATIONS & VALIDATION ---
-if current_wt < initial_wt:
-    st.error("🚨 Input Error: Current weight must be equal or greater than Initial weight.")
-    st.stop()
+# --- 7. DASHBOARD & COMPARISON ---
+if st.session_state.animal_records:
+    df = pd.DataFrame(st.session_state.animal_records)
 
-weight_gain = current_wt - initial_wt
-# ADG: prefer timeseries ADG if available
-adg = timeseries_adg if timeseries_adg is not None else safe_div(weight_gain, days)
-fcr = safe_div(feed_used, weight_gain) if weight_gain > 0 else None
+    # KPIs
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Herd Profit (period)", f"KES {df['Profit'].sum():,.0f}")
+    c2.metric("Avg ADG", f"{df['ADG'].dropna().mean():.2f} kg/day" if not df['ADG'].dropna().empty else "—")
+    c3.metric("Total CH₄ Emitted (period)", f"{df['Methane'].sum():.2f} kg")
+    c4.metric("Animals Tracked", f"{len(df)}")
 
-# profit: show both current gross value and incremental profit for the period
-revenue_now = current_wt * price_per_kg
-revenue_gain = weight_gain * price_per_kg
-feed_costs = feed_used * feed_cost
-profit_incremental = revenue_gain - feed_costs
-profit_current_value = revenue_now - feed_costs
+    st.markdown("---")
+    # Allow deletion of selected records by ID
+    st.subheader("📋 Herd Comparison Table")
+    st.dataframe(df.assign(Timestamp=df.get("Timestamp", "")).loc[:, ["ID", "Species", "Weight", "ADG", "Profit", "Methane", "Timestamp"]], use_container_width=True)
 
-daily_methane = SPECIES_INFO[species]["ch4"]
-total_methane_period = days * daily_methane
-days_to_target = estimate_days_to_target(current_wt, target_wt, adg)
+    cols = st.columns([3, 1, 1])
+    with cols[0]:
+        st.write("Select records to remove (by Animal ID):")
+        ids = [str(x) for x in df["ID"].tolist()]
+        to_remove = st.multiselect("Remove IDs", options=ids)
+    with cols[1]:
+        if st.button("Delete selected"):
+            if to_remove:
+                st.session_state.animal_records = [r for r in st.session_state.animal_records if r["ID"] not in to_remove]
+                st.success(f"Removed {len(to_remove)} record(s).")
+                st.experimental_rerun()
+            else:
+                st.info("No IDs selected.")
+    with cols[2]:
+        if st.button("Clear all records"):
+            st.session_state.animal_records = []
+            st.experimental_rerun()
 
-# methane intensity (kg CH4 per kg gain) — guard for zero gain
-methane_intensity = safe_div(total_methane_period, weight_gain) if weight_gain > 0 else None
+    # Scatter chart Performance vs Sustainability
+    st.markdown("---")
+    st.subheader("📊 Performance vs Sustainability")
+    chart = alt.Chart(df).mark_circle(size=120).encode(
+        x=alt.X("ADG:Q", title="ADG (kg/day)"),
+        y=alt.Y("Profit:Q", title="Profit (KES)"),
+        color="Species:N",
+        tooltip=["ID", "Species", alt.Tooltip("ADG:Q", format=".3f"), alt.Tooltip("Profit:Q", format=",.0f"), alt.Tooltip("Methane:Q", format=".2f")]
+    ).interactive()
+    st.altair_chart(chart, use_container_width=True)
 
-# --- 9. DASHBOARD ---
-st.divider()
-adg_target = SPECIES_INFO[species]["adg_threshold"]
+    # --- PDF & CSV EXPORT ---
+    st.markdown("---")
+    st.subheader("Export reports")
+    if st.button("Generate PDF production report (download below)"):
+        try:
+            pdf_bytes = create_pdf_bytes(st.session_state.animal_records)
+            st.success("PDF generated — use the download button below.")
+            st.download_button("Download PDF report", data=pdf_bytes, file_name="Production_Report.pdf", mime="application/pdf")
+        except Exception as e:
+            st.error(f"Failed to generate PDF: {e}")
 
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("Avg Daily Gain (ADG)", f"{adg:.3f} kg" if adg is not None else "—", delta=f"{adg - adg_target:.3f} vs target" if adg is not None else "")
-k2.metric("Feed Conversion Ratio (FCR)", f"{fcr:.2f}" if fcr is not None else "—", delta="Lower is better")
-k3.metric("Methane (CH₄) — period", f"{total_methane_period:.3f} kg", delta=f"{daily_methane:.3f} kg/day")
-k4.metric("Profit (period)", f"KES {profit_incremental:,.0f}", help="Revenue from weight gain minus feed cost for this period")
+    # CSV download (session data)
+    csv_bytes = df.to_csv(index=False).encode("utf-8")
+    st.download_button("Download session data (CSV)", data=csv_bytes, file_name="herd_session.csv", mime="text/csv")
 
-st.write(f"Gross value (current weight): KES {revenue_now:,.2f} — Feed cost (period): KES {feed_costs:,.2f} — Net (current): KES {profit_current_value:,.2f}")
-
-# insights
-st.divider()
-c1, c2 = st.columns(2)
-with c1:
-    st.subheader("🩺 Expert Recommendations")
-    if adg is None:
-        st.info("Insufficient data to compute ADG. Upload time-series or provide valid summary inputs.")
-    else:
-        if adg < adg_target:
-            st.warning("⚠️ Growth below benchmark. Check nutrition, parasite control, and health management.")
+    # Option to view DB records saved earlier
+    st.markdown("---")
+    if st.button("Load recent records from local DB"):
+        df_db = load_db_records()
+        if not df_db.empty:
+            st.subheader("Records from local DB")
+            st.dataframe(df_db, use_container_width=True)
         else:
-            st.success("✅ Growth on track. Management appears efficient.")
-
-    st.subheader("💰 Cost-Benefit Simulator")
-    expected_boost = st.slider("Boost ADG by (kg/day) using better feed", 0.0, 0.5, 0.1, step=0.01)
-    if adg is not None and adg > 0:
-        new_adg = adg + expected_boost
-        if days_to_target != inf:
-            new_days_to_target = estimate_days_to_target(current_wt, target_wt, new_adg)
-            days_saved = None
-            if new_days_to_target != inf:
-                days_saved = max(0, int(days_to_target - new_days_to_target)) if days_to_target != inf else None
-            if days_saved is not None:
-                st.write(f"Estimated days saved to reach target: **{days_saved} days**")
-        else:
-            st.info("Cannot estimate days to target with current ADG (zero/negative).")
-
-with c2:
-    st.subheader("🌱 Sustainability Impact")
-    if days_to_target == inf:
-        st.info("Cannot compute lifecycle methane projection: ADG is zero or negative.")
-    else:
-        total_life_methane = (days + max(0.0, days_to_target)) * daily_methane
-        st.write(f"Total methane (period + remaining to target): **{total_life_methane:.2f} kg CH₄**")
-        if methane_intensity is not None:
-            st.write(f"Methane intensity (kg CH₄ per kg weight gain in period): **{methane_intensity:.3f}**")
-        eco_df = pd.DataFrame({
-            "Category": ["Emitted (period)", "Remaining to Target"],
-            "Methane (kg)": [total_methane_period, (days_to_target * daily_methane) if days_to_target != inf else 0.0]
-        })
-        eco_chart = alt.Chart(eco_df).mark_bar().encode(
-            x=alt.X("Category:N"),
-            y=alt.Y("Methane (kg):Q"),
-            color="Category:N"
-        ).properties(height=220)
-        st.altair_chart(eco_chart, use_container_width=True)
-
-# --- 10. OPTIONAL: timeseries preview & projection chart ---
-if ts_df is not None:
-    st.markdown("### Uploaded time-series")
-    st.dataframe(ts_df)
-    chart_ts = alt.Chart(ts_df).mark_line(point=True).encode(x="day", y="weight").properties(height=240)
-    st.altair_chart(chart_ts, use_container_width=True)
-
-# projection
-st.markdown("### Projection to Target (linear projection based on ADG)")
-if adg is None or adg <= 0:
-    st.info("Projection unavailable: ADG must be positive.")
+            st.info("No DB records found or DB empty.")
 else:
-    if days_to_target == inf:
-        st.info("ADG > 0 is required for projection.")
-    else:
-        proj_days = max(30, int(days_to_target))
-        proj_df = pd.DataFrame({"day": list(range(0, proj_days + 1))})
-        proj_df["weight"] = current_wt + proj_df["day"] * adg
-        chart_proj = alt.Chart(proj_df).mark_line(point=True).encode(x=alt.X("day", title="Days from now"), y=alt.Y("weight", title="Weight (kg)"))
-        st.altair_chart(chart_proj, use_container_width=True)
-
-# --- 11. FOOTER & EXPORT ---
-st.sidebar.markdown("---")
-st.sidebar.caption("Eco-Score: Efficiency = Sustainability")
-
-# small export
-summary = {
-    "species": species,
-    "initial_wt": initial_wt,
-    "current_wt": current_wt,
-    "weight_gain": weight_gain,
-    "adg": adg,
-    "fcr": fcr,
-    "profit_incremental": profit_incremental,
-    "total_methane_period": total_methane_period,
-    "methane_intensity": methane_intensity,
-}
-st.download_button("Download run summary (CSV)", data=pd.DataFrame([summary]).to_csv(index=False), file_name="run_summary.csv", mime="text/csv")
+    st.info("👋 Welcome! Use the sidebar to add your first animal record (or upload a CSV) to build your herd report.")
