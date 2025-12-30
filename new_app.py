@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 import random
-import plotly.express as px
 
 # --- 1. APP CONFIGURATION ---
 st.set_page_config(page_title="AEGIS Livestock Pro", page_icon="🧬", layout="wide")
@@ -27,18 +26,24 @@ if 'records' not in st.session_state:
 # --- 4. GENETICS MODULE FUNCTION ---
 def render_genetics_tab(df):
     st.header("🧬 Genetic Performance & Lineage")
-    st.info("Tracking offspring performance to identify superior Kenyan breeding lines.")
+    st.info("Tracking offspring performance to identify superior breeding lines.")
 
     if not df.empty and 'Sire_ID' in df.columns:
-        # 1. Performance by Sire (The "Superior Male" Logic)
         st.subheader("Offspring Performance by Sire")
-        # We use current weight as a proxy for genetic potential
-        sire_stats = df.groupby('Sire_ID')['Current_Wt'].mean().reset_index()
-        sire_stats.columns = ['Sire ID', 'Avg Offspring Weight (kg)']
         
-        fig = px.bar(sire_stats, x='Sire ID', y='Avg Offspring Weight (kg)', 
-                     color='Avg Offspring Weight (kg)', color_continuous_scale='Viridis')
-        st.plotly_chart(fig, use_container_width=True)
+        # Calculate average weight of offspring for each father
+        sire_stats = df.groupby('Sire_ID')['Current_Wt'].mean().reset_index()
+        sire_stats.columns = ['Sire_ID', 'Avg_Weight']
+
+        # Create Altair Chart (Replaces Plotly)
+        genetic_chart = alt.Chart(sire_stats).mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3).encode(
+            x=alt.X('Sire_ID:N', title="Sire (Father) ID"),
+            y=alt.Y('Avg_Weight:Q', title="Average Offspring Weight (kg)"),
+            color=alt.Color('Avg_Weight:Q', scale=alt.Scale(scheme='greens'), legend=None),
+            tooltip=['Sire_ID', 'Avg_Weight']
+        ).properties(height=400)
+
+        st.altair_chart(genetic_chart, use_container_width=True)
 
         # 2. Individual Lineage Lookup
         st.divider()
@@ -50,11 +55,10 @@ def render_genetics_tab(df):
         
         c1, c2, c3 = st.columns(3)
         c1.metric("Animal ID", selected_animal)
-        c2.metric("Sire (Father)", animal_data.get('Sire_ID', "None"))
-        c3.metric("Dam (Mother)", animal_data.get('Dam_ID', "None"))
+        c2.metric("Sire (Father)", animal_data.get('Sire_ID', "Unknown"))
+        c3.metric("Dam (Mother)", animal_data.get('Dam_ID', "Unknown"))
     else:
-        st.warning("No breeding data available yet. Add animals with Sire/Dam info in the sidebar.")
-
+        st.warning("No breeding data available. Add animals with Sire/Dam info in the sidebar.")
 # --- 5. SIDEBAR: DATA ENTRY & NAVIGATION ---
 with st.sidebar:
     st.image("https://upload.wikimedia.org/wikipedia/en/thumb/7/71/University_of_Nairobi_Logo.png/220px-University_of_Nairobi_Logo.png", width=80)
