@@ -3,3 +3,5 @@ pandas
 altair
 plotly
 requests
+base64
+json
