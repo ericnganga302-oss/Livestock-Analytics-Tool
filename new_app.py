@@ -36,6 +36,19 @@ SPECIES_INFO = {
 if 'records' not in st.session_state: st.session_state.records = []
 
 # --- 5. SIDEBAR: DATA ENTRY & MARKET FEED ---
+# Your existing navigation logic
+menu = ["Dashboard", "AniWise", "Genetics & Breeding", "Settings"]
+choice = st.sidebar.selectbox("Navigate AEGIS", menu)
+
+if choice == "Dashboard":
+    # Your existing dashboard code
+    pass
+elif choice == "AniWise":
+    # Your existing AniWise code
+    pass
+elif choice == "Genetics & Breeding":
+    # CALL THE NEW CODE HERE
+    render_genetics_tab(your_dataframe_name)
 with st.sidebar:
     st.image("https://upload.wikimedia.org/wikipedia/en/thumb/7/71/University_of_Nairobi_Logo.png/220px-University_of_Nairobi_Logo.png", width=100)
     st.title("Settings")
@@ -120,3 +133,42 @@ with col_main:
 
 # --- 8. FOOTER ---
 st.caption("Developed for UoN Animal Production Research | Powered by AniWise AI Logic")
+# ___9. GENETICS BREEDING___
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+
+def render_genetics_tab(df):
+    st.header("🧬 Genetic Performance & Lineage")
+    st.info("This module tracks offspring performance to identify superior breeding lines.")
+
+    # 1. Performance by Sire (The "Superior Male" Logic)
+    if 'Sire_ID' in df.columns and 'Weight_kg' in df.columns:
+        st.subheader("Offspring Performance by Sire")
+        
+        # Calculate average weight of offspring for each father
+        sire_stats = df.groupby('Sire_ID')['Weight_kg'].mean().reset_index()
+        sire_stats.columns = ['Sire ID', 'Avg Offspring Weight (kg)']
+        sire_stats = sire_stats.sort_values(by='Avg Offspring Weight (kg)', ascending=False)
+
+        fig = px.bar(sire_stats, x='Sire ID', y='Avg Offspring Weight (kg)', 
+                     title="Top Performing Sires (by Offspring Weight)",
+                     color='Avg Offspring Weight (kg)', color_continuous_scale='Greens')
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("Please ensure your dataset has 'Sire_ID' and 'Weight_kg' columns to view genetic trends.")
+
+    # 2. Individual Lineage Lookup
+    st.subheader("Quick Pedigree Search")
+    animal_list = df['Animal_ID'].unique()
+    selected_animal = st.selectbox("Select Animal to Trace Lineage", animal_list)
+    
+    animal_data = df[df['Animal_ID'] == selected_animal].iloc[0]
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Animal ID", selected_animal)
+    with col2:
+        st.metric("Sire (Father)", animal_data.get('Sire_ID', "Unknown"))
+    with col3:
+        st.metric("Dam (Mother)", animal_data.get('Dam_ID', "Unknown"))
