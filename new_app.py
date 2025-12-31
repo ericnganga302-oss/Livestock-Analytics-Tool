@@ -5,231 +5,218 @@ import random
 import requests
 import base64
 import json
+import time
 from datetime import datetime, timedelta
 
-# --- 1. SYSTEM IDENTITY ---
-st.set_page_config(page_title="AEGIS: Strategic Livestock Infrastructure", page_icon="🛡️", layout="wide")
+# ==========================================
+# 1. CORE SYSTEM ARCHITECTURE & DATABASE
+# ==========================================
+st.set_page_config(page_title="AEGIS: Sovereign Livestock OS", page_icon="🛡️", layout="wide")
 
-# --- 2. GLOBAL CONSTANTS (THE PRODUCTION DATABASE) ---
+# Master Knowledge Databases
 MARKET_DATABASE = {
-    "Beef": {"price": 760, "cp_target": 14, "std_adg": 0.8, "ch4": 0.18, "manure": 12.0, "biogas": 0.04},
-    "Pig": {"price": 550, "cp_target": 16, "std_adg": 0.6, "ch4": 0.04, "manure": 4.0, "biogas": 0.06},
-    "Goat": {"price": 950, "cp_target": 15, "std_adg": 0.15, "ch4": 0.02, "manure": 1.5, "biogas": 0.05},
-    "Sheep": {"price": 900, "cp_target": 15, "std_adg": 0.2, "ch4": 0.02, "manure": 1.5, "biogas": 0.05}
+    "Beef": {"price": 760, "cp_target": 14, "std_adg": 0.8, "ch4": 0.18, "manure": 12.0, "biogas": 0.04, "cycle": 21, "gest": 283},
+    "Pig": {"price": 550, "cp_target": 16, "std_adg": 0.6, "ch4": 0.04, "manure": 4.0, "biogas": 0.06, "cycle": 21, "gest": 114},
+    "Goat": {"price": 950, "cp_target": 15, "std_adg": 0.15, "ch4": 0.02, "manure": 1.5, "biogas": 0.05, "cycle": 21, "gest": 150},
+    "Sheep": {"price": 900, "cp_target": 15, "std_adg": 0.2, "ch4": 0.02, "manure": 1.5, "biogas": 0.05, "cycle": 17, "gest": 152}
 }
 
-# Real-world Vaccination Timelines (Days from entry/birth)
+FEED_LIBRARY = {
+    "Whole Maize": {"cp": 8.2, "energy": 13.5, "type": "Energy"},
+    "Maize Bran": {"cp": 7.0, "energy": 11.5, "type": "Energy"},
+    "Soya Bean Meal": {"cp": 45.0, "energy": 12.5, "type": "Protein"},
+    "Cotton Seed Cake": {"cp": 26.0, "energy": 10.5, "type": "Protein"},
+    "Omena (Fishmeal)": {"cp": 55.0, "energy": 11.0, "type": "Protein"},
+    "Lucerne": {"cp": 18.0, "energy": 8.5, "type": "Roughage"}
+}
+
 VAX_PROTOCOLS = {
-    "Beef": [("FMD (Foot & Mouth)", 0), ("Lumpy Skin", 30), ("Anthrax/Blackquarter", 180)],
-    "Pig": [("Swine Fever", 0), ("Parvovirus", 21), ("Erysipelas", 45)],
+    "Beef": [("FMD", 0), ("Lumpy Skin", 30), ("Anthrax/Blackquarter", 180)],
+    "Pig": [("Swine Fever", 0), ("Parvo", 21), ("Erysipelas", 45)],
     "Goat": [("PPR", 0), ("CCPP", 30), ("Enterotoxaemia", 60)],
     "Sheep": [("Blue Tongue", 0), ("Sheep Pox", 30), ("Foot Rot", 90)]
 }
 
-# --- 3. PERSISTENCE LAYER ---
+TRIAGE_MATRIX = {
+    "Respiratory": {
+        "Coughing/Nasal Discharge": {"risk": "Yellow", "diag": "Pneumonia", "action": "Isolate & check temperature."},
+        "Open Mouth Breathing": {"risk": "Red", "diag": "Acute Distress/Anthrax", "action": "IMMEDIATE VET CALL."}
+    },
+    "Digestive": {
+        "Bloated Left Flank": {"risk": "Red", "diag": "Frothy Bloat", "action": "Emergency: Use stomach tube or trocar."},
+        "Scours (Diarrhea)": {"risk": "Yellow", "diag": "Coccidiosis", "action": "Hydrate with ORS; check foul smell."}
+    }
+}
+
+MEDICATION_WITHDRAWAL = {
+    "Penicillin": {"milk": 3, "meat": 21},
+    "Oxytetracycline": {"milk": 5, "meat": 28},
+    "Ivermectin": {"milk": 28, "meat": 21}
+}
+
+VET_DIRECTORY = {
+    "Nakuru": [{"name": "Dr. Maina", "phone": "+254 711 000 000", "loc": "Njoro"}, {"name": "County Vet", "phone": "+254 722 000 000", "loc": "Nakuru CBD"}],
+    "Nairobi/Kiambu": [{"name": "UoN Vet Clinic", "phone": "+254 711 222 333", "loc": "Kabete"}]
+}
+
+# ==========================================
+# 2. SESSION STATE & UTILITIES
+# ==========================================
 if 'db' not in st.session_state: st.session_state.db = []
-if 'reset_auth' not in st.session_state: st.session_state.reset_auth = False
 
-def save_snapshot():
-    return base64.b64encode(json.dumps(st.session_state.db).encode()).decode()
-
-def load_snapshot(code):
+def get_live_weather(city="Nakuru"):
+    api_key = "11e5adaf7907408fa5661babadc4605c" 
+    url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
     try:
-        st.session_state.db = json.loads(base64.b64decode(code.encode()).decode())
-        return True
-    except: return False
+        r = requests.get(url, timeout=3)
+        return r.json() if r.status_code == 200 else None
+    except: return None
 
-# --- 4. SIDEBAR INFRASTRUCTURE ---
+# ==========================================
+# 3. SIDEBAR NAVIGATION
+# ==========================================
 with st.sidebar:
-    st.image("https://upload.wikimedia.org/wikipedia/en/thumb/7/71/University_of_Nairobi_Logo.png/220px-University_of_Nairobi_Logo.png", width=100)
-    st.title("AEGIS v14.0")
-    st.subheader("Creator: Eric Kamau")
+    st.image("https://upload.wikimedia.org/wikipedia/en/thumb/7/71/University_of_Nairobi_Logo.png/220px-University_of_Nairobi_Logo.png", width=90)
+    st.title("AEGIS v21.0")
+    st.write(f"**Creator:** Eric Kamau")
     
-    app_mode = st.selectbox("Switch Module", 
-        ["Strategic Dashboard", "Sire Genetic Ranking", "Feed Optimizer Pro", "Vax Sentinel (Live)", "Green Cycle Hub", "AI Visual Diagnostic", "System Security"])
-    
+    nav = st.radio("Sovereign Modules", [
+        "📊 Tactical Dashboard", "🧬 Genetic Scorecard", "🧪 Optimizer Pro", 
+        "📅 Vax Sentinel", "🩺 Health Triage", "🧬 Fertility Sentinel", 
+        "♻️ Green Cycle Hub", "💊 Drug Safety", "⚙️ System Admin"
+    ])
+
     st.divider()
-    st.info("🆕 Register Asset")
-    with st.form("entry_form", clear_on_submit=True):
-        spec = st.selectbox("Species", list(MARKET_DATABASE.keys()))
-        sire = st.text_input("Sire/Lineage ID", "UoN-BULL-X")
-        c1, c2 = st.columns(2)
-        w_in = c1.number_input("Entry Wt (kg)", 1.0, 1000.0, 25.0)
-        w_now = c1.number_input("Current Wt (kg)", 1.0, 1000.0, 30.0)
-        days = c2.number_input("Days Active", 1, 1000, 10)
-        feed_total = c2.number_input("Total Feed (kg)", 0.1, 5000.0, 50.0)
-        
-        if st.form_submit_button("DEPLOY DATA"):
-            # Calculus of Profit & Growth
+    with st.form("entry_form"):
+        st.write("### 📥 Animal Intake")
+        sp = st.selectbox("Species", list(MARKET_DATABASE.keys()))
+        sire = st.text_input("Sire ID", "UoN-BULL-01")
+        w_in = st.number_input("Start Wt (kg)", 1.0, 1000.0, 30.0)
+        w_now = st.number_input("Current Wt (kg)", 1.0, 1000.0, 35.0)
+        days = st.number_input("Days Active", 1, 5000, 15)
+        feed = st.number_input("Total Feed (kg)", 0.1, 10000.0, 60.0)
+        if st.form_submit_button("COMMITTING DATA..."):
             gain = w_now - w_in
-            adg = gain / days
-            revenue = w_now * MARKET_DATABASE[spec]["price"]
-            # Feed cost calculated dynamically (assuming avg KES 60/kg if no custom mix)
-            profit = revenue - (feed_total * 60) 
-            
-            entry = {
-                "uid": f"AEG-{random.randint(1000,9999)}",
-                "spec": spec, "sire": sire, "adg": adg, "profit": profit,
-                "days": days, "weight": w_now, "feed": feed_total,
-                "timestamp": datetime.now().strftime("%Y-%m-%d"),
-                "fcr": feed_total / gain if gain > 0 else 0
-            }
-            st.session_state.db.append(entry)
-            st.success("Asset Encrypted & Saved.")
+            adg = gain/days
+            profit = (w_now * MARKET_DATABASE[sp]["price"]) - (feed * 60)
+            st.session_state.db.append({
+                "uid": f"AEG-{random.randint(1000,9999)}", "spec": sp, "sire": sire, 
+                "adg": adg, "profit": profit, "weight": w_now, "feed": feed,
+                "date": datetime.now().strftime("%Y-%m-%d"), "manure": days * MARKET_DATABASE[sp]["manure"]
+            })
             st.rerun()
 
-# --- 5. FUNCTIONAL MODULES ---
+# ==========================================
+# 4. MODULES
+# ==========================================
 
-# MODULE 1: STRATEGIC DASHBOARD
-if app_mode == "Strategic Dashboard":
-    st.title("📊 Strategic Herd Performance")
+# --- DASHBOARD & WEATHER ---
+if nav == "📊 Tactical Dashboard":
+    st.title("Tactical Herd Dashboard")
+    weather = get_live_weather("Nakuru")
+    if weather:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Live Temp", f"{weather['main']['temp']}°C")
+        c2.metric("Humidity", f"{weather['main']['humidity']}%")
+        c3.info(f"Alert: {'Rain Risk' if 'rain' in weather['weather'][0]['description'] else 'Clear Sky'}")
+    
     if st.session_state.db:
         df = pd.DataFrame(st.session_state.db)
-        
-        # Top-Level Metrics
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Net Valuation", f"KES {df['profit'].sum():,.0f}")
-        m2.metric("Mean ADG", f"{df['adg'].mean():.3f} kg/d")
-        m3.metric("FCR (Efficiency)", f"{df['fcr'].mean():.2f}")
-        m4.metric("Asset Count", len(df))
-
-        # Advanced Altair Visualization
-        st.subheader("Performance vs Target Analysis")
-        df['target'] = df['spec'].apply(lambda x: MARKET_DATABASE[x]['std_adg'])
-        chart = alt.Chart(df).mark_bar().encode(
-            x='uid:N', y='adg:Q',
-            color=alt.condition(alt.datum.adg >= alt.datum.target, alt.value("#2ecc71"), alt.value("#e74c3c"))
-        ).properties(height=400)
-        st.altair_chart(chart, use_container_width=True)
+        st.metric("Total Net Profit", f"KES {df['profit'].sum():,.0f}")
         st.dataframe(df, use_container_width=True)
-    else:
-        st.warning("No assets deployed. Use sidebar to register animals.")
+    else: st.info("Registry empty.")
 
-# MODULE 2: SIRE GENETIC RANKING (FUNCTIONAL)
-elif app_mode == "Sire Genetic Ranking":
-    st.title("🧬 Genetic merit Scorecard")
+# --- SIRE SCORECARD ---
+elif nav == "🧬 Genetic Scorecard":
+    st.title("Sire Genetic Merit Rankings")
     if st.session_state.db:
         df = pd.DataFrame(st.session_state.db)
-        # Calculate deviation from breed standard per sire
         df['target'] = df['spec'].apply(lambda x: MARKET_DATABASE[x]['std_adg'])
         df['deviation'] = df['adg'] - df['target']
-        
-        sire_report = df.groupby('sire').agg({
-            'deviation': 'mean', 'profit': 'sum', 'uid': 'count'
-        }).reset_index().rename(columns={'uid': 'Offspring'}).sort_values('deviation', ascending=False)
-        
-        st.write("Ranking Sires based on progeny growth superiority:")
-        st.table(sire_report.style.background_gradient(subset=['deviation'], cmap='RdYlGn'))
-    else:
-        st.info("Genetic data will appear after animal registration.")
+        rank = df.groupby('sire')['deviation'].mean().sort_values(ascending=False).reset_index()
+        st.table(rank.style.background_gradient(cmap='RdYlGn'))
+    else: st.warning("No breeding data available.")
 
-# MODULE 3: FEED OPTIMIZER PRO
-elif app_mode == "Feed Optimizer Pro":
-    st.title("🧪 Pearson Square Optimization Lab")
+# --- OPTIMIZER PRO ---
+elif nav == "🧪 Optimizer Pro":
+    st.title("Nutritional Feed Lab")
     
-    st.write("Scientifically balance Crude Protein (CP) using local Kenyan ingredients.")
+    t_cp = st.number_input("Target Protein %", 10.0, 30.0, 16.0)
+    e_name = st.selectbox("Energy Ingredient", [k for k,v in FEED_LIBRARY.items() if v['type'] == 'Energy'])
+    p_name = st.selectbox("Protein Ingredient", [k for k,v in FEED_LIBRARY.items() if v['type'] == 'Protein'])
     
-    col_a, col_b = st.columns(2)
-    with col_a:
-        target_cp = st.slider("Target CP %", 10.0, 30.0, 16.0)
-        batch_kg = st.number_input("Batch Size (kg)", 1, 10000, 100)
-    with col_b:
-        e_name = st.text_input("Energy Source", "Maize Bran")
-        e_cp = st.number_input(f"{e_name} CP%", 1.0, 15.0, 8.5)
-        p_name = st.text_input("Protein Source", "Cotton Seed Cake")
-        p_cp = st.number_input(f"{p_name} CP%", 20.0, 50.0, 36.0)
+    cp1, cp2 = FEED_LIBRARY[e_name]['cp'], FEED_LIBRARY[p_name]['cp']
+    if cp1 < t_cp < cp2:
+        parts_e = abs(cp2 - t_cp)
+        parts_p = abs(cp1 - t_cp)
+        total = parts_e + parts_p
+        st.success(f"Mix: {(parts_e/total)*100:.1f}% {e_name} | {(parts_p/total)*100:.1f}% {p_name}")
+    else: st.error("Target CP is impossible with these ingredients.")
 
-    if p_cp > target_cp > e_cp:
-        diff_e = abs(p_cp - target_cp)
-        diff_p = abs(e_cp - target_cp)
-        total_parts = diff_e + diff_p
-        
-        st.success(f"Formulation for {batch_kg}kg batch:")
-        st.metric(e_name, f"{(diff_e/total_parts)*batch_kg:.2f} kg")
-        st.metric(p_name, f"{(diff_p/total_parts)*batch_kg:.2f} kg")
-    else:
-        st.error("Target must be between your two ingredients' protein levels.")
-
-# MODULE 4: VAX SENTINEL (LIVE DYNAMIC CALENDAR)
-elif app_mode == "Vax Sentinel (Live)":
-    st.title("📅 Vaccination Sentinel (Live Timelines)")
+# --- VAX SENTINEL ---
+elif nav == "📅 Vax Sentinel":
+    st.title("Automated Vaccination Sentinel")
     if st.session_state.db:
-        vax_data = []
-        for animal in st.session_state.db:
-            entry_date = datetime.strptime(animal["timestamp"], "%Y-%m-%d")
-            for disease, days_out in VAX_PROTOCOLS[animal["spec"]]:
-                vax_date = entry_date + timedelta(days=days_out)
-                vax_data.append({
-                    "Animal ID": animal["uid"],
-                    "Vaccine": disease,
-                    "Date Due": vax_date.strftime("%Y-%m-%d"),
-                    "Status": "Urgent" if vax_date.date() <= datetime.now().date() else "Pending"
-                })
-        
-        v_df = pd.DataFrame(vax_data).sort_values("Date Due")
-        st.table(v_df.style.map(lambda x: 'color: red' if x == 'Urgent' else '', subset=['Status']))
-    else:
-        st.info("Register an animal to generate its unique vaccination timeline.")
+        v_list = []
+        for a in st.session_state.db:
+            base = datetime.strptime(a["date"], "%Y-%m-%d")
+            for name, delta in VAX_PROTOCOLS[a["spec"]]:
+                v_list.append({"Animal ID": a["uid"], "Vaccine": name, "Due Date": (base + timedelta(days=delta)).date()})
+        st.table(pd.DataFrame(v_list).sort_values("Due Date"))
+    else: st.info("Registry empty.")
 
-# MODULE 5: GREEN CYCLE HUB
-elif app_mode == "Green Cycle Hub":
-    st.title("♻️ Green Cycle: Waste-to-Energy")
+# --- HEALTH TRIAGE ---
+elif nav == "🩺 Health Triage":
+    st.title("Clinical Triage & Field Response")
+    
+    st.subheader("1. Vet Directory")
+    reg = st.selectbox("Region", list(VET_DIRECTORY.keys()))
+    st.write(VET_DIRECTORY[reg])
+    
+    st.subheader("2. Symptom Checker")
+    sys = st.selectbox("Affected System", list(TRIAGE_MATRIX.keys()))
+    sym = st.selectbox("Observed Sign", list(TRIAGE_MATRIX[sys].keys()))
+    res = TRIAGE_MATRIX[sys][sym]
+    st.error(f"**Level:** {res['risk']} | **Potential:** {res['diag']}")
+    st.info(f"**Immediate Action:** {res['action']}")
+
+# --- FERTILITY SENTINEL ---
+elif nav == "🧬 Fertility Sentinel":
+    st.title("Reproductive Cycle Predictor")
+    
+    spec = st.selectbox("Species", list(MARKET_DATABASE.keys()))
+    last_h = st.date_input("Last Heat Date")
+    st.metric("Next Heat Peak", (last_h + timedelta(days=MARKET_DATABASE[spec]['cycle'])).strftime("%d %b"))
+    st.metric("Gestation Due Date", (last_h + timedelta(days=MARKET_DATABASE[spec]['gest'])).strftime("%d %b, %Y"))
+
+# --- GREEN CYCLE ---
+elif nav == "♻️ Green Cycle Hub":
+    st.title("Circular Waste-to-Energy")
+    
     if st.session_state.db:
         df = pd.DataFrame(st.session_state.db)
-        df['daily_manure'] = df['spec'].apply(lambda x: MARKET_DATABASE[x]['manure'])
-        df['daily_biogas'] = df['spec'].apply(lambda x: MARKET_DATABASE[x]['biogas'] * MARKET_DATABASE[x]['manure'])
-        
-        total_gas = df['daily_biogas'].sum()
-        st.metric("Total Herd Biogas Generation", f"{total_gas:.2f} m³/day")
-        st.info(f"This is enough to cook for **{total_gas * 2.5:.1f} hours** on a single burner.")
-        
-    else:
-        st.warning("Data required for environmental impact modeling.")
+        total_m = df['manure'].sum()
+        st.metric("Total Manure Logged (kg)", f"{total_m:,.1f}")
+        st.info(f"Current herd can generate **{total_m * 0.05:.2f} m³** of biogas per day.")
 
-# MODULE 6: AI VISUAL DIAGNOSTIC
-elif app_mode == "AI Visual Diagnostic":
-    st.title("📸 Visual AI Diagnostic (FAMACHA)")
-    file = st.file_uploader("Upload Animal Eye/Dermal Photo", type=['jpg', 'png'])
-    if file:
-        st.image(file, width=400)
-        with st.spinner("Analyzing Morphology..."):
-            # Real simulation logic: Based on color histogram probability (placeholders for v15)
-            risk = random.choice(["Low", "Moderate", "High - Clinical Anemia"])
-            st.error(f"AEGIS AI Analysis: {risk} Risk Detected.")
-            st.markdown("Check Field Manual for **Haemonchus contortus** treatment protocols.")
-            
+# --- DRUG SAFETY ---
+elif nav == "💊 Drug Safety":
+    st.title("Withdrawal Safety Tracker")
+    drug = st.selectbox("Administered Drug", list(MEDICATION_WITHDRAWAL.keys()))
+    d_given = st.date_input("Date Administered")
+    m_safe = d_given + timedelta(days=MEDICATION_WITHDRAWAL[drug]['milk'])
+    t_safe = d_given + timedelta(days=MEDICATION_WITHDRAWAL[drug]['meat'])
+    st.warning(f"**Safe for Milk:** {m_safe} | **Safe for Meat:** {t_safe}")
+    if datetime.now().date() < m_safe: st.error("🚫 MILK IS CURRENTLY UNSAFE FOR HUMAN CONSUMPTION.")
 
-# MODULE 7: SYSTEM SECURITY (BACKUP & RESET)
-elif app_mode == "System Security":
-    st.title("⚙️ System Administration & Security")
-    
-    st.subheader("Cloud Sync (Portable Snapshot)")
-    if st.button("Generate Secure Snapshot Hash"):
-        st.code(save_snapshot(), language="text")
-        st.caption("Copy this hash to save your entire project data externally.")
-    
-    st.divider()
-    restore_input = st.text_input("Enter Snapshot Hash to Restore")
-    if st.button("Execute Restoration"):
-        if load_snapshot(restore_input):
-            st.success("System Restored.")
-            st.rerun()
-        else: st.error("Invalid Hash.")
-
-    st.divider()
-    if not st.session_state.reset_auth:
-        if st.button("🚨 FACTORY DATA RESET"):
-            st.session_state.reset_auth = True
-            st.rerun()
-    else:
-        st.error("CRITICAL: This will delete all herd data. Proceed?")
-        if st.button("✅ CONFIRM PURGE"):
-            st.session_state.db = []
-            st.session_state.reset_auth = False
-            st.rerun()
-        if st.button("❌ CANCEL"):
-            st.session_state.reset_auth = False
-            st.rerun()
+# --- SYSTEM ADMIN ---
+elif nav == "⚙️ System Admin":
+    st.title("Admin & Cloud Snapshots")
+    if st.button("Generate Cloud Backup Code"):
+        st.code(base64.b64encode(json.dumps(st.session_state.db).encode()).decode())
+    if st.button("PURGE ALL DATA"):
+        st.session_state.db = []
+        st.rerun()
 
 st.divider()
-st.caption(f"AEGIS v14.0 | Research Lead: Eric Kamau | University of Nairobi | {datetime.now().year}")
+st.caption(f"AEGIS v21.0 | Eric Kamau | University of Nairobi | {datetime.now().year}")
