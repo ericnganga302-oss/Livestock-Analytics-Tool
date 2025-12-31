@@ -6,3 +6,4 @@ requests
 base64
 json
 urllib.parse
+numpy
