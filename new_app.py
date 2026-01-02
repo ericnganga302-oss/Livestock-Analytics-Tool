@@ -119,9 +119,18 @@ with st.sidebar:
     st.caption("University of Nairobi | 2026")
     
     nav = st.radio("Sovereign Modules", [
-        "📊 Dashboard & Finance", "🧬 Genetic Scorecard", "🧪 Optimizer Pro", 
-        "📅 Vax Sentinel", "🩺 Health Triage", "🧬 Fertility Sentinel", 
-        "♻️ Green Cycle Hub", "💊 Drug Safety", "📡 Transmission Hub", "⚙️ System Admin"
+        "📊 Dashboard & Finance", 
+        "🧬 Genetic Scorecard", 
+        "🧪 Optimizer Pro", 
+        "📅 Vax Sentinel", 
+        "🩺 Health Triage", 
+        "👁️ FAMACHA Lab",          
+        "🧬 Fertility Sentinel", 
+        "♻️ Green Cycle Hub", 
+        "💊 Drug Safety", 
+        "🆔 Public Profiles",        
+        "📡 Transmission Hub", 
+        "⚙️ System Admin"
     ])
 
     st.divider()
@@ -188,13 +197,13 @@ if nav == "📊 Dashboard & Finance":
     else: 
         st.info("Registry empty. Please add animals via the sidebar.")
         # ==========================================
-# AEGIS v23.0 UPGRADE MODULES
-# ==========================================
+=======================
 
 # --- K. FAMACHA VISUAL LAB (The "Eye Check") ---
 if nav == "👁️ FAMACHA Lab":
     st.title("👁️ FAMACHA© Anemia calibration")
-    st.markdown("""
+    st.markdown("""# AEGIS v23.0 UPGRADE MODULES
+# ===================
     **Protocol:** Pull down the lower eyelid of the sheep/goat. Compare the color of the mucous membrane to the chart below.
     """)
     
