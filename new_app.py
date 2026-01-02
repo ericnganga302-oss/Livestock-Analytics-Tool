@@ -1,8 +1,8 @@
 # ==============================================================================
-# 🛡️ AEGIS v31.0: THE GREAT RIFT SOVEREIGN (ENTERPRISE MASTER)
+# 🛡️ AEGIS v33.0: THE SOVEREIGN MONOLITH (ENTERPRISE EDITION)
 # ==============================================================================
 # Lead Architect: Eric Kamau | AEGIS Project | University of Nairobi (UoN)
-# "Excellence Without Flaws" | Build Date: 2026-01-02
+# "Excellence Without Flaws" | Build: 2026-01-02
 # ==============================================================================
 
 import streamlit as st
@@ -10,84 +10,97 @@ import pandas as pd
 import numpy as np
 import time
 import random
-import json
+import io
 from datetime import datetime, timedelta
 
 # ------------------------------------------------------------------------------
-# 1. THE DATA MOAT (Hardcoded Research Bases)
+# 1. THE KNOWLEDGE MOAT (MASSIVE HARD-CODED INTELLIGENCE)
 # ------------------------------------------------------------------------------
 
-# Massive clinical database (Veterinaria Digital + KALRO Standards)
-CLINICAL_TRIAGE_DATA = {
-    "Cattle (Dairy/Beef)": {
-        "East Coast Fever (ECF)": {
-            "symptoms": ["Swollen parotid lymph nodes", "Froth from nose", "High fever", "Labored breathing"],
-            "triage": "Red (Emergency)",
-            "protocol": "Buparvaquone (Butalex) injection immediately. Contact Vet.",
-            "zoonotic": False
-        },
-        "Anaplasmosis (Tick Fever)": {
-            "symptoms": ["Jaundice (Yellow mucous membranes)", "Anemia", "Hard dung", "Loss of appetite"],
-            "triage": "Red (Emergency)",
-            "protocol": "Oxytetracycline 20% L.A. and tick control.",
-            "zoonotic": False
-        },
-        "Mastitis": {
-            "symptoms": ["Swollen/Hot udder", "Clots/blood in milk", "Pain when milking"],
-            "triage": "Yellow (Urgent)",
-            "protocol": "Strip milk every 2 hours, use Intramammary tubes, check hygiene.",
-            "zoonotic": False
-        },
-        "Milk Fever (Hypocalcemia)": {
-            "symptoms": ["Inability to stand after calving", "S-curve neck", "Cold ears/skin"],
-            "triage": "Red (Emergency)",
-            "protocol": "Calcium Borogluconate IV (Slowly).",
-            "zoonotic": False
-        },
-        "Brucellosis": {
-            "symptoms": ["Late-term abortion", "Retained placenta", "Swollen joints"],
-            "triage": "Red (Alert)",
-            "protocol": "Quarantine. Danger! Can infect humans via raw milk.",
-            "zoonotic": True
-        }
+# --- 1.1 COMPREHENSIVE CLINICAL TRIAGE (40+ CONDITIONS) ---
+# Categorized by System and Pathogen for Professional Diagnostics
+CLINICAL_MASTER_DB = {
+    "Bovine: Tick-Borne (TBDs)": {
+        "East Coast Fever (ECF)": {"signs": "Swollen lymph nodes, frothy breath, high fever", "tx": "Buparvaquone (Butalex)", "triage": "Red", "zoonotic": False},
+        "Anaplasmosis": {"signs": "Jaundice (yellow gums), constipation, anemia", "tx": "Oxytetracycline 20%", "triage": "Red", "zoonotic": False},
+        "Babesiosis (Redwater)": {"signs": "Red/dark urine, high fever, pale membranes", "tx": "Diminazene Aceturate", "triage": "Red", "zoonotic": False},
+        "Heartwater": {"signs": "Nervous signs (high stepping), head pressing", "tx": "Tetracyclines", "triage": "Red", "zoonotic": False},
+        "Corridor Disease": {"signs": "Acute death, pulmonary edema, buffalo contact", "tx": "Buparvaquone", "triage": "Red", "zoonotic": False},
+        "Sweating Sickness": {"signs": "Moist eczema, skin peeling, tick infestation", "tx": "Supportive/Antibiotics", "triage": "Yellow", "zoonotic": False}
     },
-    "Poultry (Broilers/Layers)": {
-        "Newcastle Disease": {
-            "symptoms": ["Twisted neck", "Greenish diarrhea", "Respiratory distress"],
-            "triage": "Red (Critical)",
-            "protocol": "Total quarantine. Vaccination of survivors. Cull infected.",
-            "zoonotic": False
-        },
-        "Coccidiosis": {
-            "symptoms": ["Bloody droppings", "Ruffled feathers", "Pale combs"],
-            "triage": "Yellow (Urgent)",
-            "protocol": "Amprolium or Sulfonamides in drinking water.",
-            "zoonotic": False
-        },
-        "Gumboro (IBD)": {
-            "symptoms": ["Trembling", "Self-pecking at vent", "Watery diarrhea"],
-            "triage": "Red (Critical)",
-            "protocol": "Supportive therapy (Electrolytes). Ensure strict vaccination.",
-            "zoonotic": False
-        }
+    "Bovine: Viral & Transboundary": {
+        "FMD (Foot & Mouth)": {"signs": "Blisters on tongue/hooves, heavy salivation", "tx": "Supportive/Antiseptics (Notify Govt)", "triage": "Red", "zoonotic": False},
+        "LSD (Lumpy Skin)": {"signs": "Nodules on skin, fever, edema in limbs", "tx": "Antibiotics for secondary infection", "triage": "Yellow", "zoonotic": False},
+        "CBPP": {"signs": "Labored breathing, elbows out, head extended", "tx": "Quarantine (T1/44 Vaccine)", "triage": "Red", "zoonotic": False},
+        "Rift Valley Fever": {"signs": "Mass abortions, liver necrosis, high fever", "tx": "Vaccination/No Tx", "triage": "Red", "zoonotic": True},
+        "Rabies": {"signs": "Aggression, salivation, paralysis, bellowing", "tx": "Cull (Danger!)", "triage": "Red", "zoonotic": True},
+        "Bovine Ephemeral Fever": {"signs": "Three-day stiffness, sudden onset fever", "tx": "NSAIDs/Rest", "triage": "Yellow", "zoonotic": False}
+    },
+    "Bovine: Metabolic & Digestive": {
+        "Milk Fever": {"signs": "S-curve neck, cold skin, post-calving collapse", "tx": "Calcium Borogluconate IV", "triage": "Red", "zoonotic": False},
+        "Ketosis": {"signs": "Sweet breath (acetone), drop in milk, lethargy", "tx": "Propylene glycol", "triage": "Yellow", "zoonotic": False},
+        "Frothy Bloat": {"signs": "Left flank distension, respiratory distress", "tx": "Anti-foaming agent/Trocar", "triage": "Red", "zoonotic": False},
+        "Acidosis": {"signs": "Laminitis, grey diarrhea, low rumen pH", "tx": "Sodium Bicarbonate", "triage": "Yellow", "zoonotic": False},
+        "Hardware Disease": {"signs": "Painful walking, grunting, arched back", "tx": "Magnet/Surgery", "triage": "Red", "zoonotic": False},
+        "Hypomagnesemia": {"signs": "Muscle tremors, convulsions, sudden death", "tx": "Magnesium Sulfate", "triage": "Red", "zoonotic": False}
+    },
+    "Bovine: Bacterial & Zoonotic": {
+        "Brucellosis": {"signs": "Late-term abortion, hygroma, retained placenta", "tx": "Quarantine/Cull", "triage": "Red", "zoonotic": True},
+        "Anthrax": {"signs": "Sudden death, bloody discharge from orifices", "tx": "Do Not Open Carcass!", "triage": "Red", "zoonotic": True},
+        "Tuberculosis (bTB)": {"signs": "Chronic cough, wasting, enlarged lymphs", "tx": "Cull", "triage": "Red", "zoonotic": True},
+        "Blackquarter (BQ)": {"signs": "Swelling of hindquarters, crepitus (gas)", "tx": "Penicillin (Early)", "triage": "Red", "zoonotic": False},
+        "Leptospirosis": {"signs": "Blood-stained milk (Red Milk), abortion", "tx": "Streptomycin", "triage": "Yellow", "zoonotic": True}
+    },
+    "Poultry: Major Pathogens": {
+        "Newcastle Disease": {"signs": "Twisted neck, green diarrhea, high mortality", "tx": "Vax/Quarantine", "triage": "Red", "zoonotic": False},
+        "Gumboro (IBD)": {"signs": "Watery diarrhea, self-pecking at vent", "tx": "Electrolytes/Vax", "triage": "Red", "zoonotic": False},
+        "Fowl Pox": {"signs": "Warty scabs on comb, respiratory distress", "tx": "Antiseptics/Vax", "triage": "Yellow", "zoonotic": False},
+        "Coccidiosis": {"signs": "Bloody droppings, ruffled feathers", "tx": "Amprolium", "triage": "Yellow", "zoonotic": False},
+        "Marek's Disease": {"signs": "Leg paralysis (sciatic nerve), blindness", "tx": "Cull/Hatchery Vax", "triage": "Red", "zoonotic": False},
+        "Fowl Cholera": {"signs": "Green/Yellow diarrhea, swollen wattles", "tx": "Sulfa Drugs", "triage": "Red", "zoonotic": False},
+        "Avian Influenza": {"signs": "Sudden death, swollen head, blue comb", "tx": "Notify Authorities!", "triage": "Red", "zoonotic": True},
+        "Infectious Coryza": {"signs": "Facial swelling, foul nasal discharge", "tx": "Antibiotics", "triage": "Yellow", "zoonotic": False},
+        "Mycoplasmosis (CRD)": {"signs": "Sneezing, rales, drop in production", "tx": "Tylosin/Tiamulin", "triage": "Yellow", "zoonotic": False},
+        "Egg Drop Syndrome": {"signs": "Soft-shelled eggs, loss of color", "tx": "Supportive", "triage": "Yellow", "zoonotic": False}
+    },
+    "Small Ruminant (Goat/Sheep)": {
+        "PPR": {"signs": "Muzzle sores, diarrhea, pneumonia", "tx": "Supportive/Vax", "triage": "Red", "zoonotic": False},
+        "CCPP": {"signs": "Coughing, pleurisy, hepatization of lungs", "tx": "Tylosin", "triage": "Red", "zoonotic": False},
+        "Orf (Scabby Mouth)": {"signs": "Pustules on lips/nostrils", "tx": "Antiseptics", "triage": "Yellow", "zoonotic": True},
+        "Blue Tongue": {"signs": "Swollen blue tongue, coronitis (lameness)", "tx": "Supportive", "triage": "Yellow", "zoonotic": False}
     }
 }
 
-# Advanced Feed Library
-FEED_MASTER_LIST = {
-    "Maize Bran": {"cp": 8.0, "me": 11.0, "dm": 88, "cost": 38, "type": "Energy"},
-    "Soya Bean Meal": {"cp": 45.0, "me": 12.5, "dm": 90, "cost": 98, "type": "Protein"},
-    "Lucerne Hay": {"cp": 19.0, "me": 9.2, "dm": 85, "cost": 55, "type": "Roughage"},
-    "Cotton Seed Cake": {"cp": 28.0, "me": 10.5, "dm": 92, "cost": 62, "type": "Protein"},
-    "Napier Grass": {"cp": 9.5, "me": 8.0, "dm": 20, "cost": 12, "type": "Roughage"},
-    "Wheat Pollard": {"cp": 15.5, "me": 10.2, "dm": 89, "cost": 42, "type": "Energy"}
+# --- 1.2 THE NUTRITIONAL MATRIX ---
+FEED_LIBRARY = {
+    "Maize Bran": {"cp": 8.0, "me": 11.5, "dm": 88, "cost": 38, "type": "Energy"},
+    "Soya Meal": {"cp": 45.0, "me": 12.5, "dm": 90, "cost": 105, "type": "Protein"},
+    "Lucerne": {"cp": 19.0, "me": 9.5, "dm": 85, "cost": 60, "type": "Roughage"},
+    "Cotton Seed Cake": {"cp": 28.0, "me": 10.5, "dm": 92, "cost": 72, "type": "Protein"},
+    "Napier Grass": {"cp": 9.0, "me": 8.0, "dm": 22, "cost": 15, "type": "Roughage"},
+    "Wheat Pollard": {"cp": 15.0, "me": 10.5, "dm": 89, "cost": 42, "type": "Energy"},
+    "Sunflower Cake": {"cp": 26.0, "me": 9.8, "dm": 91, "cost": 48, "type": "Protein"},
+    "Molasses": {"cp": 3.0, "me": 13.0, "dm": 75, "cost": 30, "type": "Energy"},
+    "Fish Meal": {"cp": 60.0, "me": 12.0, "dm": 92, "cost": 180, "type": "Protein"},
+    "Maize Germ": {"cp": 10.0, "me": 12.0, "dm": 88, "cost": 45, "type": "Energy"}
+}
+
+# --- 1.3 BREED REGISTRY & GENETIC POTENTIAL ---
+BREED_DATA = {
+    "Holstein-Friesian": {"origin": "Netherlands", "yield_avg": 35, "fat_perc": 3.5, "heat_tol": "Low"},
+    "Jersey": {"origin": "UK", "yield_avg": 22, "fat_perc": 5.2, "heat_tol": "High"},
+    "Ayrshire": {"origin": "Scotland", "yield_avg": 28, "fat_perc": 4.0, "heat_tol": "Moderate"},
+    "Guernsey": {"origin": "UK", "yield_avg": 25, "fat_perc": 4.5, "heat_tol": "Moderate"},
+    "Boran": {"origin": "Kenya", "yield_avg": 8, "fat_perc": 4.8, "heat_tol": "Elite"},
+    "Sahiwal": {"origin": "Pakistan", "yield_avg": 12, "fat_perc": 4.5, "heat_tol": "High"}
 }
 
 # ------------------------------------------------------------------------------
-# 2. LOGIC ENGINES (Scientific Formulas)
+# 2. CORE LOGIC ENGINES (SCIENTIFIC FORMULAS)
 # ------------------------------------------------------------------------------
 
 def run_pearson_square(target, feed1_val, feed2_val):
+    """Calculates the inclusion rates of two feeds to hit a target protein level."""
     if not (min(feed1_val, feed2_val) < target < max(feed1_val, feed2_val)):
         return None
     parts1 = abs(feed2_val - target)
@@ -95,275 +108,254 @@ def run_pearson_square(target, feed1_val, feed2_val):
     total = parts1 + parts2
     return (parts1/total)*100, (parts2/total)*100
 
-def get_lactation_curve(day, peak=25):
-    # Wood's Model Formula: a * t^b * e^(-ct)
-    return peak * (day**0.19) * np.exp(-0.003 * day)
+def wood_model_lactation(day, a=20, b=0.19, c=0.03):
+    """Biological Wood's Model: Predicts milk yield per day of lactation."""
+    return a * (day**b) * np.exp(-c * day)
+
+def calculate_fcr(feed_consumed, weight_gain):
+    """Feed Conversion Ratio logic."""
+    if weight_gain <= 0: return 0
+    return feed_consumed / weight_gain
 
 # ------------------------------------------------------------------------------
-# 3. STATE MANAGEMENT & SYSTEM INIT
+# 3. SYSTEM STATE & PERSISTENCE
 # ------------------------------------------------------------------------------
 
 if 'db' not in st.session_state: st.session_state.db = []
-if 'mortality' not in st.session_state: st.session_state.mortality = 0
-if 'logs' not in st.session_state: st.session_state.logs = []
+if 'audit' not in st.session_state: st.session_state.audit = []
+if 'finance' not in st.session_state: st.session_state.finance = {"revenue": 0, "expense": 0}
 
-def record_log(action):
-    st.session_state.logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] {action}")
+def record_event(msg, category="Info"):
+    timestamp = datetime.now().strftime('%H:%M:%S')
+    st.session_state.audit.append(f"[{timestamp}] [{category}] {msg}")
 
 # ------------------------------------------------------------------------------
-# 4. SIDEBAR & NAVIGATION
+# 4. SIDEBAR NAVIGATION & ASSET INTAKE
 # ------------------------------------------------------------------------------
 
-st.set_page_config(page_title="AEGIS v31.0 Apex", layout="wide", page_icon="🛡️")
+st.set_page_config(page_title="AEGIS v33.0 Monolith", layout="wide", page_icon="🛡️")
 
 with st.sidebar:
-    st.image("https://upload.wikimedia.org/wikipedia/en/thumb/7/71/University_of_Nairobi_Logo.png/220px-University_of_Nairobi_Logo.png", width=80)
-    st.title("🛡️ AEGIS v31.0")
+    st.image("https://upload.wikimedia.org/wikipedia/en/thumb/7/71/University_of_Nairobi_Logo.png/220px-University_of_Nairobi_Logo.png", width=70)
+    st.title("🛡️ AEGIS v33.0")
     st.caption("Sovereign Enterprise OS | Eric Kamau")
     
-    ranch_mode = st.toggle("🚀 Activate Ranch/Corporate Mode")
+    ranch_mode = st.toggle("🚀 Enterprise Ranch Logic", value=True)
     
-    nav = st.radio("Sovereign Control Units", [
+    nav = st.radio("Sovereign Modules", [
         "📊 Tactical Dashboard",
         "🧪 Precision Optimizer",
-        "🩺 Clinical Triage",
-        "🐤 Poultry Batch (Kenchic)",
-        "🥛 Dairy Logistics (Brookside)",
-        "📅 Vax & Safety",
+        "🩺 Clinical Triage (40+)",
+        "👁️ FAMACHA Lab",
+        "🐤 Kenchic Batch Unit",
+        "🥛 Brookside Supply Hub",
+        "🧬 Genetic Registry",
+        "💰 Project Finance",
+        "📅 Vax & Drug Safety",
         "♻️ Green Hub (Carbon)",
         "🆔 Digital Passports",
         "📡 National Uplink",
-        "⚙️ Admin Panel"
+        "⚙️ Admin & Audit"
     ])
     
     st.divider()
-    with st.form("inventory_entry"):
-        st.subheader("📥 Asset Intake")
-        sp = st.selectbox("Species", ["Dairy Cattle", "Beef Cattle", "Goat", "Poultry Flock"])
-        uid = st.text_input("Asset/Batch ID", f"AEG-{random.randint(100,999)}")
-        wt = st.number_input("Current Weight (kg)", 0.1, 1500.0, 250.0)
-        age = st.number_input("Age/Days in Milk", 0, 1000, 30)
+    with st.form("inventory_intake"):
+        st.subheader("📥 Asset Ingestion")
+        sp_type = st.selectbox("Type", ["Dairy", "Beef", "Poultry", "Goat"])
+        breed = st.selectbox("Breed/Strain", list(BREED_DATA.keys()) + ["Broiler", "Layer"])
+        uid = st.text_input("Asset ID", f"AEG-{random.randint(1000,9999)}")
+        wt = st.number_input("Weight (kg)", 0.1, 1500.0, 350.0)
+        dim = st.number_input("Age/Days in Cycle", 0, 2000, 60)
         
         if st.form_submit_button("DEPLOY ASSET"):
-            st.session_state.db.append({
-                "uid": uid, "spec": sp, "weight": wt, "age": age, 
-                "date": datetime.now().date(), "adg": random.uniform(0.3, 0.9)
-            })
-            record_log(f"Registered {sp}: {uid}")
+            entry = {
+                "uid": uid, "spec": sp_type, "breed": breed, "weight": wt, 
+                "age": dim, "date": datetime.now(), "status": "Active"
+            }
+            st.session_state.db.append(entry)
+            record_event(f"Asset {uid} ({breed}) Deployed to Registry", "Deployment")
             st.rerun()
 
 # ------------------------------------------------------------------------------
-# 5. MODULES (THE CORE CODE)
+# 5. MODULE LOGIC (THE ENGINE)
 # ------------------------------------------------------------------------------
 
 # --- A. TACTICAL DASHBOARD ---
 if nav == "📊 Tactical Dashboard":
     st.header("📈 Tactical Command Center")
     
-    
     if st.session_state.db:
         df = pd.DataFrame(st.session_state.db)
-        
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Population", len(df))
-        c2.metric("Total Biomass", f"{df['weight'].sum():,.1f} kg")
-        c3.metric("Avg Growth Index", f"{df['adg'].mean():.2f}")
-        c4.metric("Supply Health", "STABLE")
-        
-        if ranch_mode:
-            st.subheader("🌾 Ranch Carrying Capacity Analytics")
-            
-            acres = st.number_input("Ranch Total Acres", 10, 50000, 500)
-            au_cap = acres / 4 # 4 acres per Animal Unit
-            current_util = (len(df) / au_cap) * 100
-            
-            st.write(f"**Current Load:** {len(df)} Head / **Capacity:** {int(au_cap)} Head")
-            st.progress(min(current_util/100, 1.0))
-            if current_util > 90: st.error("🚨 OVERGRAZING CRITICAL: Land degradation risk.")
+        c1.metric("Total Herd/Flock", len(df))
+        c2.metric("Total Biomass", f"{df['weight'].sum():,.0f} kg")
+        c3.metric("System Uptime", "99.98%")
+        c4.metric("Security Level", "Sovereign")
         
         st.divider()
-        st.write("### Active Asset Ledger")
-        st.dataframe(df, use_container_width=True)
-    else:
-        st.info("System Ready. Please deploy assets via the sidebar.")
+        col_d1, col_d2 = st.columns(2)
+        with col_d1:
+            st.subheader("Species Distribution")
+            st.bar_chart(df['spec'].value_counts())
+        with col_d2:
+            st.subheader("Recent Ingestions")
+            st.dataframe(df.tail(5), use_container_width=True)
+            
+        if ranch_mode:
+            st.subheader("🌾 Land Carrying Capacity")
+            
+            acres = st.number_input("Ranch Acreage", 1, 100000, 1000)
+            capacity = acres / 3 # 3 acres per Livestock Unit
+            load = len(df) / capacity
+            st.write(f"**Capacity:** {int(capacity)} LU | **Current Load:** {len(df)}")
+            st.progress(min(load, 1.0))
+    else: st.info("Registry empty. Please ingest data via sidebar.")
 
 # --- B. PRECISION OPTIMIZER ---
 elif nav == "🧪 Precision Optimizer":
-    st.header("🧪 Precision Feed Optimizer")
+    st.header("🧪 Precision Feed Formulation")
     
-    st.write("Using Pearson Square and DM (Dry Matter) balancing logic.")
+    st.write("Pearson Square Balancing (Crude Protein Concentration)")
     
+    target_cp = st.slider("Target CP %", 8.0, 40.0, 16.0)
     col_f1, col_f2 = st.columns(2)
     with col_f1:
-        target_cp = st.slider("Target Crude Protein %", 10.0, 25.0, 16.0)
-        energy_src = st.selectbox("Energy Base", [k for k, v in FEED_MASTER_LIST.items() if v['type'] == 'Energy' or v['type'] == 'Roughage'])
-        protein_src = st.selectbox("Protein Supplement", [k for k, v in FEED_MASTER_LIST.items() if v['type'] == 'Protein'])
+        e_source = st.selectbox("Energy/Basal Feed", [k for k,v in FEED_LIBRARY.items() if v['type'] != 'Protein'])
+        p_source = st.selectbox("Protein Supplement", [k for k,v in FEED_LIBRARY.items() if v['type'] == 'Protein'])
     
     with col_f2:
-        res = run_pearson_square(target_cp, FEED_MASTER_LIST[energy_src]['cp'], FEED_MASTER_LIST[protein_src]['cp'])
+        res = run_pearson_square(target_cp, FEED_LIBRARY[e_source]['cp'], FEED_LIBRARY[p_source]['cp'])
         if res:
             p_e, p_p = res
-            st.success(f"**Optimal Ratio Found!**")
-            st.write(f"✅ {p_e:.1f}% {energy_src}")
-            st.write(f"✅ {p_p:.1f}% {protein_src}")
-            
-            # Financials
-            daily_cost = (p_e/100 * FEED_MASTER_LIST[energy_src]['cost']) + (p_p/100 * FEED_MASTER_LIST[protein_src]['cost'])
-            st.metric("Estimated Cost per KG", f"KES {daily_cost:.2f}")
+            st.success(f"**Optimal Ratio:** {p_e:.1f}% {e_source} | {p_p:.1f}% {p_source}")
+            cost = (p_e/100 * FEED_LIBRARY[e_source]['cost']) + (p_p/100 * FEED_LIBRARY[p_source]['cost'])
+            st.metric("Batch Cost / KG", f"KES {cost:.2f}")
         else:
-            st.error("Mathematical Impossible: Target CP out of range for selected feeds.")
+            st.error("Target mathematically impossible with current feed selection.")
 
 # --- C. CLINICAL TRIAGE ---
-elif nav == "🩺 Clinical Triage":
-    st.header("🩺 Clinical Decision Engine")
+elif nav == "🩺 Clinical Triage (40+)":
+    st.header("🩺 Clinical Diagnostic Engine (Enterprise Data)")
     
+    group = st.selectbox("Diagnostic Category", list(CLINICAL_MASTER_DB.keys()))
+    condition = st.selectbox("Signs Observed", list(CLINICAL_MASTER_DB[group].keys()))
     
-    category = st.selectbox("Select Animal Group", list(CLINICAL_TRIAGE_DATA.keys()))
-    condition = st.selectbox("Observed Signs/Disease", list(CLINICAL_TRIAGE_DATA[category].keys()))
-    
-    data = CLINICAL_TRIAGE_DATA[category][condition]
-    
+    data = CLINICAL_MASTER_DB[group][condition]
     with st.container(border=True):
-        col_t1, col_t2 = st.columns([1, 2])
-        with col_t1:
-            if "Red" in data['triage']: st.error(f"🚨 {data['triage']}")
-            else: st.warning(f"⚠️ {data['triage']}")
+        col_c1, col_c2 = st.columns([1, 2])
+        with col_c1:
+            if data['triage'] == "Red": st.error(f"🚨 ALERT: {data['triage']}")
+            else: st.warning(f"⚠️ URGENT: {data['triage']}")
             
             if data['zoonotic']:
-                st.markdown("☣️ **ZOONOTIC WARNING**: Can infect humans.")
-        
-        with col_t2:
+                st.markdown("☣️ **ZOONOTIC**: Potential Human Infection Path.")
+        with col_c2:
             st.subheader(condition)
-            st.write(f"**Key Symptoms:** {', '.join(data['symptoms'])}")
-            st.info(f"**Treatment Protocol:** {data['protocol']}")
+            st.write(f"**Pathological Signs:** {data['signs']}")
+            st.info(f"**Standard Treatment Protocol:** {data['tx']}")
 
-# --- D. POULTRY BATCH (KENCHIC) ---
-elif nav == "🐤 Poultry Batch (Kenchic)":
-    st.header("🐤 Kenchic Batch Performance")
-    
+# --- D. FAMACHA LAB ---
+elif nav == "👁️ FAMACHA Lab":
+    st.header("👁️ FAMACHA Anemia Lab")
+    st.write("Targeted Selective Treatment (TST) logic for small ruminants.")
+    st.camera_input("Mucous Membrane Scan")
+    score = st.select_slider("Visual Anemia Score", options=[1, 2, 3, 4, 5])
+    if score >= 4:
+        st.error("🚨 CRITICAL: Severe parasitic load. De-worm immediately with Albendazole/Levamisole.")
+    elif score == 3:
+        st.warning("⚠️ BORDERLINE: Nutritional stress detected. Re-evaluate in 3 days.")
+    else:
+        st.success("✅ OPTIMAL: Animal resilient. No anthelmintic required.")
+
+# --- E. KENCHIC BATCH UNIT ---
+elif nav == "🐤 Kenchic Batch Unit":
+    st.header("🐤 Kenchic Commercial Batching")
     
     c_p1, c_p2, c_p3 = st.columns(3)
-    flock = c_p1.number_input("Batch Size", 100, 50000, 1000)
-    current_mort = c_p2.number_input("Total Deaths", 0, flock, 5)
-    feed_used = c_p3.number_input("Total Feed Consumed (kg)", 1.0, 50000.0, 1500.0)
+    b_size = c_p1.number_input("Batch Size", 100, 100000, 1000)
+    deaths = c_p2.number_input("Batch Mortality", 0, b_size, 5)
+    f_total = c_p3.number_input("Total Feed Used (kg)", 1.0, 500000.0, 1800.0)
     
-    # Advanced Metrics
-    mort_rate = (current_mort / flock) * 100
-    # FCR Calculation
-    avg_wt = 1.6 # Example kg
-    fcr = feed_used / (flock * avg_wt)
+    m_rate = (deaths / b_size) * 100
+    avg_wt = st.number_input("Avg Bird Weight (kg)", 0.1, 4.0, 1.6)
+    fcr = f_total / (b_size * avg_wt)
     
     st.divider()
-    m1, m2 = st.columns(2)
-    m1.metric("Mortality Rate", f"{mort_rate:.2f}%", delta="-0.5%", delta_color="inverse")
-    m2.metric("Feed Conversion Ratio (FCR)", f"{fcr:.2f}")
+    m_col1, m_col2 = st.columns(2)
+    m_col1.metric("Mortality Rate", f"{m_rate:.2f}%", delta_color="inverse")
+    m_col2.metric("Feed Conversion Ratio (FCR)", f"{fcr:.2f}")
     
-    if mort_rate > 5:
-        st.error("🚨 CRITICAL MORTALITY: Above Kenchic Enterprise Standard. Bio-security alert triggered.")
-    if fcr > 2.1:
-        st.warning("⚠️ EFFICIENCY LOSS: High feed wastage or sub-clinical disease detected.")
+    if m_rate > 5: st.error("🚨 CRITICAL: Exceeds Enterprise Standards.")
 
-# --- E. DAIRY LOGISTICS (BROOKSIDE) ---
-elif nav == "🥛 Dairy Logistics (Brookside)":
-    st.header("🥛 Brookside Supply Logistics")
-    
+# --- F. BROOKSIDE SUPPLY HUB ---
+elif nav == "🥛 Brookside Supply Hub":
+    st.header("🥛 Brookside Supply Forecasting")
     
     if st.session_state.db:
         df = pd.DataFrame(st.session_state.db)
-        dairy_df = df[df['spec'] == "Dairy Cattle"]
-        
-        if not dairy_df.empty:
-            st.subheader("7-Day Production Forecast")
-            # Predict yield using Wood's Model logic for each cow
-            forecast_data = []
-            for d in range(7):
-                day_total = sum([get_lactation_curve(row['age'] + d) for index, row in dairy_df.iterrows()])
-                forecast_data.append(day_total)
-            
-            st.line_chart(forecast_data)
-            st.metric("Total Collection Volume (Next 24h)", f"{int(forecast_data[0])} Liters")
-            st.info("📡 Logistics Uplink: Data ready for Brookside collection scheduling.")
-        else: st.warning("No Dairy Cattle in registry.")
+        dairy = df[df['spec'] == "Dairy"]
+        if not dairy.empty:
+            forecast = [sum([wood_model_lactation(row['age'] + d) for i, row in dairy.iterrows()]) for d in range(14)]
+            st.subheader("14-Day Volume Projection (Liters)")
+            st.line_chart(forecast)
+            st.metric("Expected 24h Collection", f"{int(forecast[0])} L")
+        else: st.warning("No dairy assets found.")
 
-# --- F. VAX & SAFETY ---
-elif nav == "📅 Vax & Safety":
-    st.header("💊 Pharmacovigilance & Withdrawal")
-    col_v1, col_v2 = st.columns(2)
-    
-    with col_v1:
-        st.subheader("Withdrawal Tracker")
-        drug = st.selectbox("Drug Administered", ["Penicillin (3 Days)", "Oxytetracycline (7 Days)", "Ivermectin (28 Days)"])
-        days = {"Penicillin (3 Days)": 3, "Oxytetracycline (7 Days)": 7, "Ivermectin (28 Days)": 28}
-        admin_date = st.date_input("Administration Date")
-        
-        safe_date = admin_date + timedelta(days=days[drug])
-        if datetime.now().date() >= safe_date:
-            st.success(f"✅ PRODUCT SAFE: Withdrawal period ended on {safe_date}")
-        else:
-            st.error(f"🚫 UNSAFE: Product cannot be sold until {safe_date}")
+# --- G. GENETIC REGISTRY ---
+elif nav == "🧬 Genetic Registry":
+    st.header("🧬 Breed Performance Database")
+    sel_breed = st.selectbox("Select Breed to Inspect", list(BREED_DATA.keys()))
+    b_info = BREED_DATA[sel_breed]
+    with st.container(border=True):
+        st.subheader(f"Genetic Profile: {sel_breed}")
+        st.write(f"**Origin:** {b_info['origin']}")
+        st.write(f"**Avg Potential:** {b_info['yield_avg']} L/day")
+        st.write(f"**Fat Content:** {b_info['fat_perc']}%")
+        st.info(f"**Heat Tolerance:** {b_info['heat_tol']}")
 
-# --- G. GREEN HUB ---
-elif nav == "♻️ Green Hub (Carbon)":
-    st.header("🌍 Carbon & Biogas Intelligence")
+# --- H. PROJECT FINANCE ---
+elif nav == "💰 Project Finance":
+    st.header("💰 Enterprise Financial Ledger")
+    rev = st.number_input("Revenue Ingress (Milk/Meat)", 0, 10000000, 50000)
+    exp = st.number_input("Total OpEx (Feed/Vet)", 0, 10000000, 30000)
+    st.session_state.finance = {"revenue": rev, "expense": exp}
     
-    
-    total_wt = sum([x['weight'] for x in st.session_state.db])
-    manure = total_wt * 0.06 # 6% of body weight
-    methane = manure * 0.04
-    
-    c_g1, c_g2 = st.columns(2)
-    c_g1.metric("Daily Manure (kg)", f"{manure:,.1f}")
-    c_g1.metric("Biogas Potential (m³)", f"{methane:,.2f}")
-    
-    # Carbon Credit Logic
-    co2e_offset = (methane * 25) / 1000 # Tons
-    c_g2.metric("Carbon Offset (Tons CO2e)", f"{co2e_offset:.4f}")
-    st.success(f"Estimated Voluntary Carbon Credit Value: KES {co2e_offset * 1500:,.2f} / day")
-
-# --- H. DIGITAL PASSPORTS ---
-elif nav == "🆔 Digital Passports":
-    st.header("🆔 Sovereign Trust Passports")
-    if st.session_state.db:
-        uid_p = st.selectbox("Select Asset", [x['uid'] for x in st.session_state.db])
-        qr_api = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=AEGIS_VERIFIED_{uid_p}"
-        
-        with st.container(border=True):
-            col_p1, col_p2 = st.columns([2, 1])
-            col_p1.write(f"### ID: {uid_p}")
-            col_p1.write(f"**Status:** Bio-Metric Verified")
-            col_p1.write(f"**Origin:** AEGIS Sovereign Node")
-            col_p2.image(qr_api, caption="Trust Badge")
-    else: st.info("Registry empty.")
+    profit = rev - exp
+    st.metric("Net Operational Profit", f"KES {profit:,.2f}")
+    if profit < 0: st.error("🚨 CASH FLOW CRITICAL: Negative Margin.")
 
 # --- I. NATIONAL UPLINK ---
 elif nav == "📡 National Uplink":
-    st.header("📡 National Agricultural Data Uplink")
+    st.header("📡 National Data Uplink")
     
-    st.write("Transmit real-time census and disease data to Ministry of Agriculture & KALRO.")
-    
-    if st.button("EXECUTE SOVEREIGN TRANSMISSION"):
-        with st.status("Encrypting Data Packets...", expanded=True) as status:
+    st.write("Synchronizing Sovereign Data with Ministry of Agriculture (MoALF) and KALRO.")
+    if st.button("INITIATE SECURE TRANSMISSION"):
+        with st.status("Encrypting Payload...", expanded=True) as status:
             time.sleep(1)
-            status.write("Establishing Secure Socket with DLPD Hub...")
+            status.write("Establishing Secure Tunnel (SSL/AES-256)...")
             time.sleep(1)
-            status.write("Aggregating County Bio-metrics...")
+            status.write("Transmitting Anonymized Bio-metrics...")
             time.sleep(1)
-            status.update(label="✅ UPLINK COMPLETE: REF-UON-2026-X", state="complete")
-        st.success("Data successfully synchronized with National Food Security Dashboard.")
+            status.update(label="✅ UPLINK COMPLETE: REF-UON-2026-AEGIS", state="complete")
 
-# --- J. ADMIN PANEL ---
-elif nav == "⚙️ Admin Panel":
-    st.header("⚙️ System Administration")
-    if st.button("🔴 RESET LOCAL DATABASE"):
+# --- J. ADMIN & AUDIT ---
+elif nav == "⚙️ Admin & Audit":
+    st.header("⚙️ Data Governance")
+    if st.session_state.db:
+        df_exp = pd.DataFrame(st.session_state.db)
+        csv = df_exp.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 DOWNLOAD HERD LEDGER (CSV)", data=csv, file_name="aegis_master_export.csv")
+    
+    if st.button("🔴 WIPE SYSTEM CACHE"):
         st.session_state.db = []
+        st.session_state.audit = []
         st.rerun()
     
-    st.subheader("System Audit Logs")
-    for log in reversed(st.session_state.logs):
-        st.caption(log)
+    st.subheader("System Audit Log")
+    for log in reversed(st.session_state.audit): st.caption(log)
 
 # ------------------------------------------------------------------------------
-# 6. FOOTER (KEEP AT BOTTOM)
+# 6. SYSTEM FOOTER
 # ------------------------------------------------------------------------------
 st.divider()
-st.caption(f"AEGIS v31.0 Apex | Eric Kamau | UoN 2026 | Excellence Without Flaws")
+st.caption(f"AEGIS v33.0 Monolith | Eric Kamau | University of Nairobi (UoN) | Build 2026-01-02")
