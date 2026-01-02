@@ -9,11 +9,11 @@ import time
 from datetime import datetime, timedelta
 
 # ==========================================
-# 1. CORE SYSTEM ARCHITECTURE & DATABASE
+# 1. CORE SYSTEM CONFIGURATION
 # ==========================================
 st.set_page_config(page_title="AEGIS: Sovereign Livestock OS", page_icon="🛡️", layout="wide")
 
-# Master Knowledge Databases
+# --- MASTER KNOWLEDGE BASES ---
 MARKET_DATABASE = {
     "Beef": {"price": 760, "cp_target": 14, "std_adg": 0.8, "ch4": 0.18, "manure": 12.0, "biogas": 0.04, "cycle": 21, "gest": 283},
     "Pig": {"price": 550, "cp_target": 16, "std_adg": 0.6, "ch4": 0.04, "manure": 4.0, "biogas": 0.06, "cycle": 21, "gest": 114},
@@ -45,13 +45,18 @@ TRIAGE_MATRIX = {
     "Digestive": {
         "Bloated Left Flank": {"risk": "Red", "diag": "Frothy Bloat", "action": "Emergency: Use stomach tube or trocar."},
         "Scours (Diarrhea)": {"risk": "Yellow", "diag": "Coccidiosis", "action": "Hydrate with ORS; check foul smell."}
+    },
+    "Neurological": {
+        "Stargazing/Circling": {"risk": "Red", "diag": "Heartwater or CCN", "action": "Check for ticks; immediate antibiotic intervention."},
+        "Downer (Cannot Rise)": {"risk": "Red", "diag": "Milk Fever or Injury", "action": "Check calcium levels."}
     }
 }
 
 MEDICATION_WITHDRAWAL = {
     "Penicillin": {"milk": 3, "meat": 21},
     "Oxytetracycline": {"milk": 5, "meat": 28},
-    "Ivermectin": {"milk": 28, "meat": 21}
+    "Ivermectin": {"milk": 28, "meat": 21},
+    "Tylosin": {"milk": 4, "meat": 21}
 }
 
 VET_DIRECTORY = {
@@ -60,11 +65,12 @@ VET_DIRECTORY = {
 }
 
 # ==========================================
-# 2. SESSION STATE & UTILITIES
+# 2. UTILITY & LOGIC FUNCTIONS
 # ==========================================
 if 'db' not in st.session_state: st.session_state.db = []
 
 def get_live_weather(city="Nakuru"):
+    # Using a demo key context; in prod use environment variable
     api_key = "11e5adaf7907408fa5661babadc4605c" 
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
     try:
@@ -72,18 +78,50 @@ def get_live_weather(city="Nakuru"):
         return r.json() if r.status_code == 200 else None
     except: return None
 
+# --- NEW: FINANCIAL BURN RATE LOGIC ---
+def calculate_daily_burn(db):
+    st.subheader("💸 Economic Velocity & Burn Rate")
+    if not db:
+        st.info("⚠️ Log animal data to see financial velocity.")
+        return
+
+    df = pd.DataFrame(db)
+    # Assumptions for logic
+    labor_cost_per_head = 20 # KES per day
+    
+    total_margin = 0
+    
+    # We display the first 3 for brevity, or aggregate
+    for index, row in df.iterrows():
+        # Daily Revenue from Growth (Weight Gain Value)
+        daily_revenue = row['adg'] * MARKET_DATABASE[row['spec']]['price']
+        # Daily Expenses (Feed + Labor) - Assuming feed is total over days, roughly avg per day
+        # Better logic: (row['feed'] / row['days']) * 60 (price of feed)
+        feed_cost_daily = (row['feed'] / 15) * 60 # Using 15 as placeholder days if not tracked per day
+        daily_expense = feed_cost_daily + labor_cost_per_head
+        
+        net_velocity = daily_revenue - daily_expense
+        total_margin += net_velocity
+    
+    st.metric("Total Herd Net Daily Velocity", f"KES {total_margin:,.2f}", delta=f"{total_margin:,.2f}")
+    if total_margin < 0:
+        st.error("🚨 BURN ALERT: The farm is losing money daily. Review feed costs immediately.")
+    else:
+        st.success("✅ POSITIVE CASH FLOW: The herd is generating daily profit.")
+
 # ==========================================
-# 3. SIDEBAR NAVIGATION
+# 3. SIDEBAR NAVIGATION & INTAKE
 # ==========================================
 with st.sidebar:
     st.image("https://upload.wikimedia.org/wikipedia/en/thumb/7/71/University_of_Nairobi_Logo.png/220px-University_of_Nairobi_Logo.png", width=90)
-    st.title("AEGIS v21.0")
+    st.title("AEGIS v23.0")
     st.write(f"**Creator:** Eric Kamau")
+    st.caption("University of Nairobi | 2026")
     
     nav = st.radio("Sovereign Modules", [
-        "📊 Tactical Dashboard", "🧬 Genetic Scorecard", "🧪 Optimizer Pro", 
+        "📊 Dashboard & Finance", "🧬 Genetic Scorecard", "🧪 Optimizer Pro", 
         "📅 Vax Sentinel", "🩺 Health Triage", "🧬 Fertility Sentinel", 
-        "♻️ Green Cycle Hub", "💊 Drug Safety", "⚙️ System Admin"
+        "♻️ Green Cycle Hub", "💊 Drug Safety", "📡 Transmission Hub", "⚙️ System Admin"
     ])
 
     st.divider()
@@ -95,73 +133,62 @@ with st.sidebar:
         w_now = st.number_input("Current Wt (kg)", 1.0, 1000.0, 35.0)
         days = st.number_input("Days Active", 1, 5000, 15)
         feed = st.number_input("Total Feed (kg)", 0.1, 10000.0, 60.0)
-        if st.form_submit_button("COMMITTING DATA..."):
+        
+        if st.form_submit_button("DEPLOY ASSET"):
             gain = w_now - w_in
             adg = gain/days
             profit = (w_now * MARKET_DATABASE[sp]["price"]) - (feed * 60)
+            
             st.session_state.db.append({
                 "uid": f"AEG-{random.randint(1000,9999)}", "spec": sp, "sire": sire, 
                 "adg": adg, "profit": profit, "weight": w_now, "feed": feed,
-                "date": datetime.now().strftime("%Y-%m-%d"), "manure": days * MARKET_DATABASE[sp]["manure"]
+                "days": days, "date": datetime.now().strftime("%Y-%m-%d"), 
+                "manure": days * MARKET_DATABASE[sp]["manure"]
             })
+            st.success("Asset Deployed Successfully")
+            time.sleep(1)
             st.rerun()
 
 # ==========================================
-# 4. MODULES
+# 4. MODULES EXECUTION
 # ==========================================
 
-# --- DASHBOARD & WEATHER ---
-if nav == "📊 Tactical Dashboard":
+# --- A. DASHBOARD, WEATHER, & FINANCE ---
+if nav == "📊 Dashboard & Finance":
     st.title("Tactical Herd Dashboard")
+    
+    # 1. Weather Logic
     weather = get_live_weather("Nakuru")
     if weather:
         c1, c2, c3 = st.columns(3)
-        c1.metric("Live Temp", f"{weather['main']['temp']}°C")
-        c2.metric("Humidity", f"{weather['main']['humidity']}%")
-        c3.info(f"Alert: {'Rain Risk' if 'rain' in weather['weather'][0]['description'] else 'Clear Sky'}")
+        temp, hum = weather['main']['temp'], weather['main']['humidity']
+        c1.metric("Live Temp", f"{temp}°C")
+        c2.metric("Humidity", f"{hum}%")
+        
+        # Weather-Driven Health Alerts
+        if hum > 80 and temp > 25:
+            c3.error("🚨 HIGH RISK: Rift Valley Fever")
+            
+        elif temp < 15:
+            c3.warning("⚠️ RISK: Calf Pneumonia")
+        else:
+            c3.success("✅ Climate Stable")
     
+    # 2. General Stats
     if st.session_state.db:
         df = pd.DataFrame(st.session_state.db)
-        st.metric("Total Net Profit", f"KES {df['profit'].sum():,.0f}")
+        st.write("---")
+        st.metric("Total Herd Valuation", f"KES {df['profit'].sum():,.0f}")
         st.dataframe(df, use_container_width=True)
-    else: st.info("Registry empty.")
+        
+        # 3. Financial Burn Rate (New Feature)
+        st.write("---")
+        calculate_daily_burn(st.session_state.db)
+        
+    else: 
+        st.info("Registry empty. Please add animals via the sidebar.")
 
-
-# --- SUGGESTION 3: THE FINANCIAL BURN RATE ---
-def calculate_daily_burn(db):
-    st.title("💸 Economic Velocity & Burn Rate")
-    
-    if not db:
-        st.info("Log animal data to see financial velocity.")
-        return
-
-    df = pd.DataFrame(db)
-    
-    # Assumptions for logic
-    avg_milk_price = 55 # KES per liter
-    labor_cost_per_head = 20 # KES per day
-    
-    for index, row in df.iterrows():
-        with st.expander(f"Financial Health: {row['uid']}"):
-            # Daily Revenue from Growth (Weight Gain Value)
-            daily_revenue = row['adg'] * MARKET_DATABASE[row['spec']]['price']
-            
-            # Daily Expenses (Feed + Labor)
-            daily_expense = (row['feed'] / 15) * 60 + labor_cost_per_head # approx daily feed cost
-            
-            net_velocity = daily_revenue - daily_expense
-            
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Daily Growth Value", f"KES {daily_revenue:.2f}")
-            c2.metric("Daily Burn (Costs)", f"KES {daily_expense:.2f}", delta_color="inverse")
-            
-            if net_velocity > 0:
-                c3.metric("Net Daily Margin", f"KES {net_velocity:.2f}", delta=f"{net_velocity:.2f}")
-                st.success("✅ This asset is adding value to the farm.")
-            else:
-                c3.metric("Net Daily Margin", f"KES {net_velocity:.2f}", delta=f"{net_velocity:.2f}")
-                st.error("🚨 BURN ALERT: This animal is costing more than it is growing. Review feed or genetics.")
-# --- SIRE SCORECARD ---
+# --- B. GENETIC SCORECARD ---
 elif nav == "🧬 Genetic Scorecard":
     st.title("Sire Genetic Merit Rankings")
     if st.session_state.db:
@@ -172,9 +199,10 @@ elif nav == "🧬 Genetic Scorecard":
         st.table(rank.style.background_gradient(cmap='RdYlGn'))
     else: st.warning("No breeding data available.")
 
-# --- OPTIMIZER PRO ---
+# --- C. OPTIMIZER PRO ---
 elif nav == "🧪 Optimizer Pro":
-    st.title("Nutritional Feed Lab")
+    st.title("Nutritional Feed Lab (Pearson Square)")
+    
     
     t_cp = st.number_input("Target Protein %", 10.0, 30.0, 16.0)
     e_name = st.selectbox("Energy Ingredient", [k for k,v in FEED_LIBRARY.items() if v['type'] == 'Energy'])
@@ -185,10 +213,12 @@ elif nav == "🧪 Optimizer Pro":
         parts_e = abs(cp2 - t_cp)
         parts_p = abs(cp1 - t_cp)
         total = parts_e + parts_p
-        st.success(f"Mix: {(parts_e/total)*100:.1f}% {e_name} | {(parts_p/total)*100:.1f}% {p_name}")
-    else: st.error("Target CP is impossible with these ingredients.")
+        st.success(f"**Final Mix Formulation:**")
+        st.write(f"- {e_name}: {(parts_e/total)*100:.1f}%")
+        st.write(f"- {p_name}: {(parts_p/total)*100:.1f}%")
+    else: st.error("Target CP is mathematically impossible with these two ingredients.")
 
-# --- VAX SENTINEL ---
+# --- D. VAX SENTINEL ---
 elif nav == "📅 Vax Sentinel":
     st.title("Automated Vaccination Sentinel")
     if st.session_state.db:
@@ -200,99 +230,118 @@ elif nav == "📅 Vax Sentinel":
         st.table(pd.DataFrame(v_list).sort_values("Due Date"))
     else: st.info("Registry empty.")
 
-# --- HEALTH TRIAGE ---
+# --- E. HEALTH TRIAGE ---
 elif nav == "🩺 Health Triage":
     st.title("Clinical Triage & Field Response")
     
-    st.subheader("1. Vet Directory")
-    reg = st.selectbox("Region", list(VET_DIRECTORY.keys()))
-    st.write(VET_DIRECTORY[reg])
     
-    st.subheader("2. Symptom Checker")
-    sys = st.selectbox("Affected System", list(TRIAGE_MATRIX.keys()))
-    sym = st.selectbox("Observed Sign", list(TRIAGE_MATRIX[sys].keys()))
-    res = TRIAGE_MATRIX[sys][sym]
-    st.error(f"**Level:** {res['risk']} | **Potential:** {res['diag']}")
-    st.info(f"**Immediate Action:** {res['action']}")
+    tab1, tab2 = st.tabs(["Diagnostic Engine", "Vet Directory"])
+    
+    with tab1:
+        sys = st.selectbox("Affected System", list(TRIAGE_MATRIX.keys()))
+        sym = st.selectbox("Observed Sign", list(TRIAGE_MATRIX[sys].keys()))
+        res = TRIAGE_MATRIX[sys][sym]
+        
+        if res['risk'] == "Red":
+            st.error(f"🚨 **LEVEL: EMERGENCY** | {res['diag']}")
+        else:
+            st.warning(f"⚠️ **LEVEL: URGENT** | {res['diag']}")
+        st.info(f"**Protocol:** {res['action']}")
+        
+    with tab2:
+        reg = st.selectbox("Region", list(VET_DIRECTORY.keys()))
+        for v in VET_DIRECTORY[reg]:
+            st.write(f"**{v['name']}** - {v['phone']} ({v['loc']})")
 
-# --- FERTILITY SENTINEL ---
+# --- F. FERTILITY SENTINEL (WITH GOLDEN HOUR) ---
 elif nav == "🧬 Fertility Sentinel":
     st.title("Reproductive Cycle Predictor")
     
+    
+    # 1. Basic Calculation
     spec = st.selectbox("Species", list(MARKET_DATABASE.keys()))
     last_h = st.date_input("Last Heat Date")
-    st.metric("Next Heat Peak", (last_h + timedelta(days=MARKET_DATABASE[spec]['cycle'])).strftime("%d %b"))
-    st.metric("Gestation Due Date", (last_h + timedelta(days=MARKET_DATABASE[spec]['gest'])).strftime("%d %b, %Y"))
-    # --- SUGGESTION 2: FERTILITY GOLDEN HOUR ---
-def fertility_golden_hour():
+    
+    st.write("---")
     st.subheader("🕒 The AI 'Golden Hour' Predictor")
     
     
     col_t1, col_t2 = st.columns(2)
     with col_t1:
-        observed_time = st.time_input("When did you first see Standing Heat?", datetime.now().time())
-        observed_date = st.date_input("Date observed", datetime.now().date())
-    
-    # Combine date and time
-    start_time = datetime.combine(observed_date, observed_time)
-    
-    # The Science: Best AI window is 6-12 hours after standing heat starts
-    ai_window_start = start_time + timedelta(hours=6)
-    ai_window_end = start_time + timedelta(hours=12)
-    
-    with col_t2:
-        st.write("### 🎯 Best Insemination Window")
-        st.warning(f"**Start AI From:** {ai_window_start.strftime('%I:%M %p')}")
-        st.error(f"**Close Window By:** {ai_window_end.strftime('%I:%M %p')}")
+        observed_time = st.time_input("Time Standing Heat Began", datetime.now().time())
+        # Combine date and time
+        start_time = datetime.combine(last_h, observed_time)
+        ai_window_start = start_time + timedelta(hours=6)
+        ai_window_end = start_time + timedelta(hours=12)
         
-        # Countdown logic
-        time_diff = ai_window_start - datetime.now()
-        if datetime.now() < ai_window_start:
-            st.info(f"Wait {time_diff.seconds // 3600} hours before calling the technician.")
-        elif ai_window_start <= datetime.now() <= ai_window_end:
-            st.success("🚀 STATUS: OPTIMAL. Call your AI Technician NOW.")
-        else:
-            st.error("❌ STATUS: EXPIRED. You may have missed this cycle.")
+    with col_t2:
+        st.info(f"**Best Insemination Window:**")
+        st.write(f"From: **{ai_window_start.strftime('%I:%M %p')}**")
+        st.write(f"To: **{ai_window_end.strftime('%I:%M %p')}**")
 
-# --- GREEN CYCLE ---
+    st.write("---")
+    st.metric("Next Heat Cycle Peak", (last_h + timedelta(days=MARKET_DATABASE[spec]['cycle'])).strftime("%d %b"))
+    st.metric("Gestation Due Date", (last_h + timedelta(days=MARKET_DATABASE[spec]['gest'])).strftime("%d %b, %Y"))
+
+# --- G. GREEN CYCLE HUB (WITH BIO-SLURRY) ---
 elif nav == "♻️ Green Cycle Hub":
     st.title("Circular Waste-to-Energy")
+    
     
     if st.session_state.db:
         df = pd.DataFrame(st.session_state.db)
         total_m = df['manure'].sum()
-        st.metric("Total Manure Logged (kg)", f"{total_m:,.1f}")
-        st.info(f"Current herd can generate **{total_m * 0.05:.2f} m³** of biogas per day.")
-        # --- THE GENIUS SLURRY UPGRADE ---
-def bio_slurry_logic(total_manure):
-    st.subheader("🌱 Bio-Slurry Fertilizer Value")
-    # 1kg manure produces approx 0.7L of high-quality slurry
-    slurry_liters = total_manure * 0.7
-    # Value of slurry vs 50kg bag of fertilizer (KES 3500)
-    savings = (slurry_liters / 50) * 3500 
-    
-    st.metric("Organic Fertilizer Created", f"{slurry_liters:.1f} Liters")
-    st.success(f"💰 This replaces KES {savings:,.0f} in synthetic fertilizer costs!")
         
+        st.metric("Total Manure Logged (kg)", f"{total_m:,.1f}")
+        
+        # New Bio-Slurry Logic
+        st.subheader("🌱 Bio-Slurry Fertilizer Value")
+        slurry_liters = total_m * 0.7
+        savings = (slurry_liters / 50) * 3500 
+        
+        c1, c2 = st.columns(2)
+        c1.metric("Organic Fertilizer (L)", f"{slurry_liters:.1f}")
+        c2.metric("Synthetic Savings", f"KES {savings:,.0f}")
+        st.success(f"💰 You have saved KES {savings:,.0f} in fertilizer costs!")
+    else: st.info("No animal data to calculate manure.")
 
-# --- DRUG SAFETY ---
+# --- H. DRUG SAFETY ---
 elif nav == "💊 Drug Safety":
     st.title("Withdrawal Safety Tracker")
     drug = st.selectbox("Administered Drug", list(MEDICATION_WITHDRAWAL.keys()))
     d_given = st.date_input("Date Administered")
     m_safe = d_given + timedelta(days=MEDICATION_WITHDRAWAL[drug]['milk'])
     t_safe = d_given + timedelta(days=MEDICATION_WITHDRAWAL[drug]['meat'])
+    
     st.warning(f"**Safe for Milk:** {m_safe} | **Safe for Meat:** {t_safe}")
-    if datetime.now().date() < m_safe: st.error("🚫 MILK IS CURRENTLY UNSAFE FOR HUMAN CONSUMPTION.")
+    if datetime.now().date() < m_safe: st.error("🚫 MILK IS UNSAFE. DO NOT SELL.")
 
-# --- SYSTEM ADMIN ---
+# --- I. TRANSMISSION HUB ---
+elif nav == "📡 Transmission Hub":
+    st.title("National Transmission & Sharing")
+    if st.session_state.db:
+        df = pd.DataFrame(st.session_state.db)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("🏛️ Ministry Uplink (DLPD)")
+            if st.button("TRANSMIT CENSUS DATA"):
+                with st.spinner("Encrypting..."):
+                    time.sleep(1.5)
+                st.success("✅ Census Data Transmitted. Ref: UoN-2026-AEGIS")
+        with col2:
+            st.subheader("📤 Farmer Share")
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button("💾 Download Report", csv, "Farm_Report.csv", "text/csv")
+            st.button("📲 Share to WhatsApp")
+
+# --- J. SYSTEM ADMIN ---
 elif nav == "⚙️ System Admin":
     st.title("Admin & Cloud Snapshots")
-    if st.button("Generate Cloud Backup Code"):
+    if st.button("Generate Backup Code"):
         st.code(base64.b64encode(json.dumps(st.session_state.db).encode()).decode())
-    if st.button("PURGE ALL DATA"):
+    if st.button("🔴 PURGE ALL DATA"):
         st.session_state.db = []
         st.rerun()
 
 st.divider()
-st.caption(f"AEGIS v21.0 | Eric Kamau | University of Nairobi | {datetime.now().year}")
+st.caption(f"AEGIS v23.0 | Eric Kamau | University of Nairobi | {datetime.now().year}")
