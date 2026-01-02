@@ -187,6 +187,91 @@ if nav == "📊 Dashboard & Finance":
         
     else: 
         st.info("Registry empty. Please add animals via the sidebar.")
+        # ==========================================
+# AEGIS v23.0 UPGRADE MODULES
+# ==========================================
+
+# --- K. FAMACHA VISUAL LAB (The "Eye Check") ---
+if nav == "👁️ FAMACHA Lab":
+    st.title("👁️ FAMACHA© Anemia calibration")
+    st.markdown("""
+    **Protocol:** Pull down the lower eyelid of the sheep/goat. Compare the color of the mucous membrane to the chart below.
+    """)
+    
+    # 1. Display the Reference Chart (Simulated Colors)
+    st.subheader("1. Calibration Standard")
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.color_picker("Score 1 (Optimal)", "#FF0000", disabled=True)
+    c2.color_picker("Score 2 (Acceptable)", "#FF4D4D", disabled=True)
+    c3.color_picker("Score 3 (Borderline)", "#FF9999", disabled=True)
+    c4.color_picker("Score 4 (Dangerous)", "#FFCCCC", disabled=True)
+    c5.color_picker("Score 5 (Fatal)", "#FFFFFF", disabled=True)
+    
+    # 2. The Camera Input
+    st.subheader("2. Visual Verification")
+    img_file = st.camera_input("Take a photo of the eye membrane")
+    
+    if img_file:
+        st.success("Image captured. Compare with standards above.")
+        
+        # 3. The Diagnostic Logic
+        score = st.slider("Select the matching FAMACHA Score:", 1, 5, 3)
+        
+        st.write("---")
+        if score == 1:
+            st.success("✅ **HEALTHY:** No worms. Do NOT deworm (save money/reduce resistance).")
+        elif score == 2:
+            st.success("✅ **SAFE:** Monitor routine schedule.")
+        elif score == 3:
+            st.warning("⚠️ **BORDERLINE:** If animal is pregnant or young, deworm now. Otherwise, re-check in 2 weeks.")
+        elif score == 4:
+            st.error("🚨 **DANGER:** High parasite load. Drench immediately (Ivermectin/Albendazole).")
+        elif score == 5:
+            st.error("💀 **CRITICAL:** Severe Anemia. Deworm + Iron Injection + Vitamin B12. Move to rich feed.")
+
+# --- L. PUBLIC FACING PROFILE (QR Trust Badge) ---
+elif nav == "🆔 Public Profiles":
+    st.title("🆔 Asset Trust Badge Generator")
+    st.write("Generate a verified 'Digital Passport' for buyers or vets.")
+    
+    if st.session_state.db:
+        df = pd.DataFrame(st.session_state.db)
+        
+        # Select Animal
+        uid_select = st.selectbox("Select Asset ID for Passport", df['uid'].unique())
+        
+        # Get Animal Data
+        animal = df[df['uid'] == uid_select].iloc[0]
+        
+        # Design the Passport Card
+        st.write("---")
+        with st.container(border=True):
+            col_p1, col_p2 = st.columns([2, 1])
+            
+            with col_p1:
+                st.subheader(f"🛡️ AEGIS Verified Asset: {animal['uid']}")
+                st.caption(f"University of Nairobi | AEGIS Protocol v24.0")
+                st.write(f"**Species:** {animal['spec']} | **Sire:** {animal['sire']}")
+                st.write(f"**Current Weight:** {animal['weight']} kg")
+                st.write(f"**Growth Rate (ADG):** {animal['adg']:.2f} kg/day")
+                
+                if animal['adg'] > 0.5:
+                    st.success("✅ **Performance Status:** HIGH GROWTH")
+                else:
+                    st.warning("⚠️ **Performance Status:** STANDARD")
+            
+            with col_p2:
+                # Generate QR Code using a public API (No extra pip install needed)
+                # The QR code contains a summary text of the animal's stats
+                qr_data = f"AEGIS VERIFIED | ID: {animal['uid']} | Spec: {animal['spec']} | Wt: {animal['weight']}kg | ADG: {animal['adg']:.2f}"
+                qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={qr_data}"
+                
+                st.image(qr_url, caption="Scan to Verify History")
+        
+        st.info("💡 **Tip:** Print this page and attach it to the movement permit or invoice when selling.")
+
+    else:
+        st.info("Please add animals to the registry to generate profiles.")
 
 # --- B. GENETIC SCORECARD ---
 elif nav == "🧬 Genetic Scorecard":
