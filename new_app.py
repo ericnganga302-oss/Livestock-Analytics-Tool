@@ -126,6 +126,41 @@ if nav == "📊 Tactical Dashboard":
         st.dataframe(df, use_container_width=True)
     else: st.info("Registry empty.")
 
+
+# --- SUGGESTION 3: THE FINANCIAL BURN RATE ---
+def calculate_daily_burn(db):
+    st.title("💸 Economic Velocity & Burn Rate")
+    
+    if not db:
+        st.info("Log animal data to see financial velocity.")
+        return
+
+    df = pd.DataFrame(db)
+    
+    # Assumptions for logic
+    avg_milk_price = 55 # KES per liter
+    labor_cost_per_head = 20 # KES per day
+    
+    for index, row in df.iterrows():
+        with st.expander(f"Financial Health: {row['uid']}"):
+            # Daily Revenue from Growth (Weight Gain Value)
+            daily_revenue = row['adg'] * MARKET_DATABASE[row['spec']]['price']
+            
+            # Daily Expenses (Feed + Labor)
+            daily_expense = (row['feed'] / 15) * 60 + labor_cost_per_head # approx daily feed cost
+            
+            net_velocity = daily_revenue - daily_expense
+            
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Daily Growth Value", f"KES {daily_revenue:.2f}")
+            c2.metric("Daily Burn (Costs)", f"KES {daily_expense:.2f}", delta_color="inverse")
+            
+            if net_velocity > 0:
+                c3.metric("Net Daily Margin", f"KES {net_velocity:.2f}", delta=f"{net_velocity:.2f}")
+                st.success("✅ This asset is adding value to the farm.")
+            else:
+                c3.metric("Net Daily Margin", f"KES {net_velocity:.2f}", delta=f"{net_velocity:.2f}")
+                st.error("🚨 BURN ALERT: This animal is costing more than it is growing. Review feed or genetics.")
 # --- SIRE SCORECARD ---
 elif nav == "🧬 Genetic Scorecard":
     st.title("Sire Genetic Merit Rankings")
@@ -188,6 +223,36 @@ elif nav == "🧬 Fertility Sentinel":
     last_h = st.date_input("Last Heat Date")
     st.metric("Next Heat Peak", (last_h + timedelta(days=MARKET_DATABASE[spec]['cycle'])).strftime("%d %b"))
     st.metric("Gestation Due Date", (last_h + timedelta(days=MARKET_DATABASE[spec]['gest'])).strftime("%d %b, %Y"))
+    # --- SUGGESTION 2: FERTILITY GOLDEN HOUR ---
+def fertility_golden_hour():
+    st.subheader("🕒 The AI 'Golden Hour' Predictor")
+    
+    
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        observed_time = st.time_input("When did you first see Standing Heat?", datetime.now().time())
+        observed_date = st.date_input("Date observed", datetime.now().date())
+    
+    # Combine date and time
+    start_time = datetime.combine(observed_date, observed_time)
+    
+    # The Science: Best AI window is 6-12 hours after standing heat starts
+    ai_window_start = start_time + timedelta(hours=6)
+    ai_window_end = start_time + timedelta(hours=12)
+    
+    with col_t2:
+        st.write("### 🎯 Best Insemination Window")
+        st.warning(f"**Start AI From:** {ai_window_start.strftime('%I:%M %p')}")
+        st.error(f"**Close Window By:** {ai_window_end.strftime('%I:%M %p')}")
+        
+        # Countdown logic
+        time_diff = ai_window_start - datetime.now()
+        if datetime.now() < ai_window_start:
+            st.info(f"Wait {time_diff.seconds // 3600} hours before calling the technician.")
+        elif ai_window_start <= datetime.now() <= ai_window_end:
+            st.success("🚀 STATUS: OPTIMAL. Call your AI Technician NOW.")
+        else:
+            st.error("❌ STATUS: EXPIRED. You may have missed this cycle.")
 
 # --- GREEN CYCLE ---
 elif nav == "♻️ Green Cycle Hub":
@@ -198,6 +263,17 @@ elif nav == "♻️ Green Cycle Hub":
         total_m = df['manure'].sum()
         st.metric("Total Manure Logged (kg)", f"{total_m:,.1f}")
         st.info(f"Current herd can generate **{total_m * 0.05:.2f} m³** of biogas per day.")
+        # --- THE GENIUS SLURRY UPGRADE ---
+def bio_slurry_logic(total_manure):
+    st.subheader("🌱 Bio-Slurry Fertilizer Value")
+    # 1kg manure produces approx 0.7L of high-quality slurry
+    slurry_liters = total_manure * 0.7
+    # Value of slurry vs 50kg bag of fertilizer (KES 3500)
+    savings = (slurry_liters / 50) * 3500 
+    
+    st.metric("Organic Fertilizer Created", f"{slurry_liters:.1f} Liters")
+    st.success(f"💰 This replaces KES {savings:,.0f} in synthetic fertilizer costs!")
+        
 
 # --- DRUG SAFETY ---
 elif nav == "💊 Drug Safety":
